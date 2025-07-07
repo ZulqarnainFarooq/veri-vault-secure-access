@@ -25,13 +25,14 @@ export class BiometricAuthService {
   private static readonly TOKEN_KEY = 'biometric_token';
   private static readonly USER_KEY = 'biometric_user';
   private static readonly EXPIRY_KEY = 'biometric_expiry';
-  private static readonly ENABLED_KEY = 'biometric_enabled';
-  private static readonly TYPE_KEY = 'biometric_type';
+  private static readonly FINGERPRINT_ENABLED_KEY = 'biometric_fingerprint_enabled';
+  private static readonly FACE_ENABLED_KEY = 'biometric_face_enabled';
+  private static readonly TYPES_ENROLLED_KEY = 'biometric_types_enrolled';
   private static readonly FAILURE_COUNT_KEY = 'biometric_failures';
   private static readonly LOCKOUT_KEY = 'biometric_lockout';
   private static readonly MAX_FAILURES = 3;
   
-  static async authenticate(biometricType?: BiometricType): Promise<BiometricAuthResult> {
+  static async authenticate(biometricType: BiometricType): Promise<BiometricAuthResult> {
     try {
       // Check if locked out
       const isLockedOut = await this.isLockedOut();
@@ -39,18 +40,15 @@ export class BiometricAuthService {
         return { success: false, error: 'Too many failed attempts. Please use email/password.' };
       }
 
-      const isEnabled = await this.isBiometricEnabled();
+      const isEnabled = await this.isBiometricTypeEnabled(biometricType);
       if (!isEnabled) {
-        return { success: false, error: 'Biometric authentication not enabled' };
+        return { success: false, error: `${biometricType === 'face' ? 'Face ID' : 'Touch ID'} not enabled` };
       }
-
-      const storedType = await this.getBiometricType();
-      const authType = biometricType || storedType;
 
       // Simulate biometric prompt based on type
       return new Promise((resolve) => {
-        const typeText = authType === 'face' ? 'Face ID' : 'Touch ID';
-        const instruction = authType === 'face' ? 'look at the camera' : 'place your finger on the sensor';
+        const typeText = biometricType === 'face' ? 'Face ID' : 'Touch ID';
+        const instruction = biometricType === 'face' ? 'look at the camera' : 'place your finger on the sensor';
         
         const result = window.confirm(
           `🔐 ${typeText} Authentication\n\nPlease ${instruction} to authenticate.`
@@ -153,12 +151,18 @@ export class BiometricAuthService {
     try {
       const expiryTime = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
       
+      // Get current enabled types
+      const currentTypes = await this.getEnabledBiometricTypes();
+      const updatedTypes = currentTypes.includes(biometricType) ? currentTypes : [...currentTypes, biometricType];
+      
+      const enabledKey = biometricType === 'face' ? this.FACE_ENABLED_KEY : this.FINGERPRINT_ENABLED_KEY;
+      
       await Promise.all([
         Preferences.set({ key: this.TOKEN_KEY, value: token }),
         Preferences.set({ key: this.USER_KEY, value: userId }),
         Preferences.set({ key: this.EXPIRY_KEY, value: expiryTime.toString() }),
-        Preferences.set({ key: this.ENABLED_KEY, value: 'true' }),
-        Preferences.set({ key: this.TYPE_KEY, value: biometricType })
+        Preferences.set({ key: enabledKey, value: 'true' }),
+        Preferences.set({ key: this.TYPES_ENROLLED_KEY, value: JSON.stringify(updatedTypes) })
       ]);
       
       return true;
@@ -168,28 +172,73 @@ export class BiometricAuthService {
     }
   }
 
-  static async disableBiometricAuth(): Promise<void> {
+  static async disableBiometricAuth(biometricType?: BiometricType): Promise<void> {
     try {
-      await Promise.all([
-        Preferences.remove({ key: this.TOKEN_KEY }),
-        Preferences.remove({ key: this.USER_KEY }),
-        Preferences.remove({ key: this.EXPIRY_KEY }),
-        Preferences.remove({ key: this.TYPE_KEY }),
-        Preferences.set({ key: this.ENABLED_KEY, value: 'false' }),
-        this.clearFailureCount(),
-        this.clearLockout()
-      ]);
+      if (biometricType) {
+        // Disable specific biometric type
+        const enabledKey = biometricType === 'face' ? this.FACE_ENABLED_KEY : this.FINGERPRINT_ENABLED_KEY;
+        const currentTypes = await this.getEnabledBiometricTypes();
+        const updatedTypes = currentTypes.filter(type => type !== biometricType);
+        
+        await Promise.all([
+          Preferences.set({ key: enabledKey, value: 'false' }),
+          Preferences.set({ key: this.TYPES_ENROLLED_KEY, value: JSON.stringify(updatedTypes) })
+        ]);
+        
+        // If no biometric types left, clear all data
+        if (updatedTypes.length === 0) {
+          await this.clearAllBiometricData();
+        }
+      } else {
+        // Disable all biometric authentication
+        await this.clearAllBiometricData();
+      }
     } catch (error) {
       console.error('Failed to disable biometric auth:', error);
     }
   }
 
+  private static async clearAllBiometricData(): Promise<void> {
+    await Promise.all([
+      Preferences.remove({ key: this.TOKEN_KEY }),
+      Preferences.remove({ key: this.USER_KEY }),
+      Preferences.remove({ key: this.EXPIRY_KEY }),
+      Preferences.set({ key: this.FINGERPRINT_ENABLED_KEY, value: 'false' }),
+      Preferences.set({ key: this.FACE_ENABLED_KEY, value: 'false' }),
+      Preferences.set({ key: this.TYPES_ENROLLED_KEY, value: '[]' }),
+      this.clearFailureCount(),
+      this.clearLockout()
+    ]);
+  }
+
   static async isBiometricEnabled(): Promise<boolean> {
     try {
-      const { value } = await Preferences.get({ key: this.ENABLED_KEY });
+      const types = await this.getEnabledBiometricTypes();
+      return types.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  static async isBiometricTypeEnabled(biometricType: BiometricType): Promise<boolean> {
+    try {
+      const enabledKey = biometricType === 'face' ? this.FACE_ENABLED_KEY : this.FINGERPRINT_ENABLED_KEY;
+      const { value } = await Preferences.get({ key: enabledKey });
       return value === 'true';
     } catch {
       return false;
+    }
+  }
+
+  static async getEnabledBiometricTypes(): Promise<BiometricType[]> {
+    try {
+      const { value } = await Preferences.get({ key: this.TYPES_ENROLLED_KEY });
+      if (!value) return [];
+      
+      const types = JSON.parse(value) as BiometricType[];
+      return types.filter(type => type !== 'none');
+    } catch {
+      return [];
     }
   }
 
@@ -228,8 +277,8 @@ export class BiometricAuthService {
 
   static async getBiometricType(): Promise<BiometricType> {
     try {
-      const { value } = await Preferences.get({ key: this.TYPE_KEY });
-      return (value as BiometricType) || 'none';
+      const types = await this.getEnabledBiometricTypes();
+      return types.length > 0 ? types[0] : 'none';
     } catch {
       return 'none';
     }

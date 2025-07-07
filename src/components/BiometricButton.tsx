@@ -26,7 +26,8 @@ const BiometricButton: React.FC<BiometricButtonProps> = ({
     setIsAuthenticating(true);
     
     try {
-      const result = await BiometricAuthService.authenticate();
+      const biometricType = capabilities?.biometryType === 'face' ? 'face' : 'fingerprint';
+      const result = await BiometricAuthService.authenticate(biometricType);
       
       if (result.success) {
         toast({

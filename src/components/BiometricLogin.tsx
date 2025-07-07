@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import BiometricButton from './BiometricButton';
+import FingerprintButton from './FingerprintButton';
+import FaceIDButton from './FaceIDButton';
 import { BiometricAuthService, BiometricCapabilities } from '@/lib/biometric-auth';
 import { useToast } from '@/hooks/use-toast';
 import { Shield, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -18,7 +19,7 @@ interface BiometricLoginProps {
 
 const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSignup }) => {
   const [capabilities, setCapabilities] = useState<BiometricCapabilities | null>(null);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [enabledBiometricTypes, setEnabledBiometricTypes] = useState<('fingerprint' | 'face')[]>([]);
   const [showTraditionalLogin, setShowTraditionalLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,12 +36,13 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
     const caps = await BiometricAuthService.checkBiometricCapabilities();
     setCapabilities(caps);
 
-    // Check if biometric is enabled
-    const enabled = await BiometricAuthService.isBiometricEnabled();
-    setBiometricEnabled(enabled);
+    // Check enabled biometric types
+    const types = await BiometricAuthService.getEnabledBiometricTypes();
+    const validTypes = types.filter(type => type === 'fingerprint' || type === 'face') as ('fingerprint' | 'face')[];
+    setEnabledBiometricTypes(validTypes);
 
     // Check for stored credentials
-    if (enabled) {
+    if (validTypes.length > 0) {
       const creds = await BiometricAuthService.getStoredCredentials();
       setStoredCredentials(creds);
     }
@@ -170,14 +172,22 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
             </Alert>
           )}
 
-          {/* Biometric Authentication */}
+          {/* Biometric Authentication Buttons */}
           {capabilities?.isAvailable && capabilities.hasEnrolledBiometrics && storedCredentials && !showTraditionalLogin && (
-            <div className="text-center space-y-6">
-              <BiometricButton
-                onSuccess={handleBiometricSuccess}
-                onError={handleBiometricError}
-                capabilities={capabilities}
-              />
+            <div className="text-center space-y-4">
+              {enabledBiometricTypes.includes('fingerprint') && (
+                <FingerprintButton
+                  onSuccess={handleBiometricSuccess}
+                  onError={handleBiometricError}
+                />
+              )}
+              
+              {enabledBiometricTypes.includes('face') && (
+                <FaceIDButton
+                  onSuccess={handleBiometricSuccess}
+                  onError={handleBiometricError}
+                />
+              )}
               
               <div className="flex items-center space-x-2">
                 <Separator className="flex-1" />
@@ -221,22 +231,6 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
                   required
                 />
               </div>
-
-              {/* Biometric Toggle */}
-              {capabilities?.isAvailable && capabilities.hasEnrolledBiometrics && (
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">Enable Biometric Login</p>
-                    <p className="text-xs text-muted-foreground">
-                      Use {capabilities.biometryType === 'face' ? 'Face ID' : 'Touch ID'} for future logins
-                    </p>
-                  </div>
-                  <Switch
-                    checked={biometricEnabled}
-                    onCheckedChange={handleBiometricToggle}
-                  />
-                </div>
-              )}
 
               <Button
                 type="submit"
