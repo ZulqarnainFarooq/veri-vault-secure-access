@@ -13,9 +13,10 @@ import { Shield, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface BiometricLoginProps {
   onLogin: (userId: string) => void;
+  onSwitchToSignup?: () => void;
 }
 
-const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin }) => {
+const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSignup }) => {
   const [capabilities, setCapabilities] = useState<BiometricCapabilities | null>(null);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [showTraditionalLogin, setShowTraditionalLogin] = useState(false);
@@ -245,6 +246,17 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin }) => {
               >
                 {isLoading ? 'Signing In...' : 'Sign In'}
               </Button>
+
+              {onSwitchToSignup && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={onSwitchToSignup}
+                  className="w-full"
+                >
+                  Don't have an account? Sign Up
+                </Button>
+              )}
 
               {showTraditionalLogin && storedCredentials && (
                 <Button
