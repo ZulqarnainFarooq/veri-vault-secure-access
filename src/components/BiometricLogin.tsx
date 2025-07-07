@@ -76,9 +76,10 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
         const userId = `user_${Date.now()}`;
         const token = `token_${Math.random().toString(36).substr(2, 9)}`;
         
-        // Enable biometric auth if requested
-        if (biometricEnabled && capabilities?.isAvailable) {
-          await BiometricAuthService.enableBiometricAuth(userId, token);
+        // Enable biometric auth if available
+        if (capabilities?.isAvailable && capabilities.hasEnrolledBiometrics) {
+          const biometricType = capabilities.biometryType === 'face' ? 'face' : 'fingerprint';
+          await BiometricAuthService.enableBiometricAuth(userId, token, biometricType);
           toast({
             title: "Biometric Authentication Enabled",
             description: "You can now use biometric authentication for future logins.",
@@ -100,14 +101,19 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
     }
   };
 
-  const handleBiometricToggle = async (enabled: boolean) => {
-    setBiometricEnabled(enabled);
+  const handleBiometricToggle = async (biometricType: 'fingerprint' | 'face', enabled: boolean) => {
     if (!enabled) {
-      await BiometricAuthService.disableBiometricAuth();
-      setStoredCredentials(null);
+      await BiometricAuthService.disableBiometricAuth(biometricType);
+      const updatedTypes = enabledBiometricTypes.filter(type => type !== biometricType);
+      setEnabledBiometricTypes(updatedTypes);
+      
+      if (updatedTypes.length === 0) {
+        setStoredCredentials(null);
+      }
+      
       toast({
         title: "Biometric Authentication Disabled",
-        description: "You will need to log in with email and password next time.",
+        description: `${biometricType === 'face' ? 'Face ID' : 'Touch ID'} has been disabled.`,
       });
     }
   };
@@ -129,7 +135,7 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
       };
     }
 
-    if (biometricEnabled && storedCredentials) {
+    if (enabledBiometricTypes.length > 0 && storedCredentials) {
       return {
         icon: <CheckCircle2 className="h-4 w-4 text-biometric" />,
         message: "Biometric authentication is ready to use",
