@@ -26,7 +26,13 @@ export default {
 				foreground: 'hsl(var(--foreground))',
 				primary: {
 					DEFAULT: 'hsl(var(--primary))',
-					foreground: 'hsl(var(--primary-foreground))'
+					foreground: 'hsl(var(--primary-foreground))',
+					glow: 'hsl(var(--primary-glow))'
+				},
+				biometric: {
+					DEFAULT: 'hsl(var(--biometric))',
+					foreground: 'hsl(var(--biometric-foreground))',
+					glow: 'hsl(var(--biometric-glow))'
 				},
 				secondary: {
 					DEFAULT: 'hsl(var(--secondary))',
@@ -84,11 +90,50 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'pulse-security': {
+					'0%, 100%': {
+						opacity: '1',
+						transform: 'scale(1)'
+					},
+					'50%': {
+						opacity: '0.8',
+						transform: 'scale(1.05)'
+					}
+				},
+				'scan-line': {
+					'0%': {
+						transform: 'translateY(-100%)',
+						opacity: '0'
+					},
+					'50%': {
+						opacity: '1'
+					},
+					'100%': {
+						transform: 'translateY(100%)',
+						opacity: '0'
+					}
+				},
+				'biometric-glow': {
+					'0%, 100%': {
+						boxShadow: '0 0 20px hsl(var(--biometric) / 0.4)'
+					},
+					'50%': {
+						boxShadow: '0 0 40px hsl(var(--biometric) / 0.8), 0 0 60px hsl(var(--biometric) / 0.4)'
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse-security': 'pulse-security 2s ease-in-out infinite',
+				'scan-line': 'scan-line 2s ease-in-out infinite',
+				'biometric-glow': 'biometric-glow 2s ease-in-out infinite'
+			},
+			backgroundImage: {
+				'gradient-security': 'var(--gradient-security)',
+				'gradient-biometric': 'var(--gradient-biometric)',
+				'gradient-surface': 'var(--gradient-surface)'
 			}
 		}
 	},

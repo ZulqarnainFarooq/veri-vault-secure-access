@@ -2,39 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* VeriVault Security-First Design System
+All colors MUST be HSL. Biometric authentication focused design.
 */
 
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 225 15% 20%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 225 15% 20%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 225 15% 20%;
 
-    --primary: 222.2 47.4% 11.2%;
+    /* Security-focused primary colors - Deep blue for trust */
+    --primary: 220 91% 15%;
     --primary-foreground: 210 40% 98%;
+    --primary-glow: 220 91% 45%;
+
+    /* Biometric accent - Cyan for tech feel */
+    --biometric: 180 100% 35%;
+    --biometric-foreground: 0 0% 100%;
+    --biometric-glow: 180 100% 55%;
 
     --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary-foreground: 225 15% 20%;
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
     --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent-foreground: 225 15% 20%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 220 91% 15%;
+
+    /* Security gradients */
+    --gradient-security: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-biometric: linear-gradient(135deg, hsl(var(--biometric)), hsl(var(--biometric-glow)));
+    --gradient-surface: linear-gradient(180deg, hsl(var(--background)), hsl(210 40% 98%));
+
+    /* Security shadows */
+    --shadow-security: 0 10px 30px -10px hsl(var(--primary) / 0.3);
+    --shadow-biometric: 0 0 40px hsl(var(--biometric) / 0.4);
+    --shadow-glow: 0 0 20px hsl(var(--primary-glow) / 0.6);
+
+    /* Smooth animations */
+    --transition-security: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-pulse: all 1.5s cubic-bezier(0.4, 0, 0.6, 1);
 
     --radius: 0.5rem;
 
@@ -56,33 +77,49 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 225 15% 8%;
     --foreground: 210 40% 98%;
 
-    --card: 222.2 84% 4.9%;
+    --card: 225 15% 10%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 222.2 84% 4.9%;
+    --popover: 225 15% 10%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    /* Dark mode security colors */
+    --primary: 220 91% 55%;
+    --primary-foreground: 225 15% 8%;
+    --primary-glow: 220 91% 65%;
 
-    --secondary: 217.2 32.6% 17.5%;
+    --biometric: 180 100% 45%;
+    --biometric-foreground: 225 15% 8%;
+    --biometric-glow: 180 100% 65%;
+
+    --secondary: 225 15% 15%;
     --secondary-foreground: 210 40% 98%;
 
-    --muted: 217.2 32.6% 17.5%;
+    --muted: 225 15% 15%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 225 15% 15%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 62.8% 50.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --border: 225 15% 20%;
+    --input: 225 15% 20%;
+    --ring: 220 91% 55%;
+
+    /* Dark mode gradients */
+    --gradient-security: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-biometric: linear-gradient(135deg, hsl(var(--biometric)), hsl(var(--biometric-glow)));
+    --gradient-surface: linear-gradient(180deg, hsl(var(--background)), hsl(225 15% 12%));
+
+    /* Dark mode shadows */
+    --shadow-security: 0 10px 30px -10px hsl(var(--primary) / 0.5);
+    --shadow-biometric: 0 0 40px hsl(var(--biometric) / 0.6);
+    --shadow-glow: 0 0 30px hsl(var(--primary-glow) / 0.8);
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
