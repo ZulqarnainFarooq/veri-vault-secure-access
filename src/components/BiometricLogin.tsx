@@ -77,8 +77,8 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
     try {
       const result = await BiometricAuthService.authenticate(biometricType);
       
-      if (result.success && result.token) {
-        const { error } = await signInWithBiometric(result.token);
+      if (result.success && result.sessionToken) {
+        const { error } = await signInWithBiometric(result.sessionToken);
         
         if (error) {
           setError(error.message);
