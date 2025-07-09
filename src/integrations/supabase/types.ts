@@ -65,6 +65,7 @@ export type Database = {
           face_id_enabled: boolean | null
           fingerprint_enabled: boolean | null
           id: string
+          initial_setup_complete: boolean | null
           last_biometric_login: string | null
           last_biometric_setup: string | null
           security_level: string | null
@@ -84,6 +85,7 @@ export type Database = {
           face_id_enabled?: boolean | null
           fingerprint_enabled?: boolean | null
           id: string
+          initial_setup_complete?: boolean | null
           last_biometric_login?: string | null
           last_biometric_setup?: string | null
           security_level?: string | null
@@ -103,6 +105,7 @@ export type Database = {
           face_id_enabled?: boolean | null
           fingerprint_enabled?: boolean | null
           id?: string
+          initial_setup_complete?: boolean | null
           last_biometric_login?: string | null
           last_biometric_setup?: string | null
           security_level?: string | null

@@ -20,18 +20,18 @@ const Index = () => {
     
     // Check if user needs biometric setup after registration
     if (user && userProfile) {
-      const isNewUser = new Date(userProfile.created_at) > new Date(Date.now() - 10 * 60 * 1000); // 10 minutes
-      const hasNotSetupBiometric = !userProfile.biometric_enabled;
+      // Check if this is a new user who hasn't completed initial setup
       const hasNotCompletedInitialSetup = !userProfile.initial_setup_complete;
+      const hasNotSetupBiometric = !userProfile.biometric_enabled;
       
       console.log('Setup check:', {
-        isNewUser,
-        hasNotSetupBiometric,
         hasNotCompletedInitialSetup,
-        createdAt: userProfile.created_at
+        hasNotSetupBiometric,
+        createdAt: userProfile.created_at,
+        initialSetupComplete: userProfile.initial_setup_complete
       });
 
-      if ((isNewUser || hasNotCompletedInitialSetup) && hasNotSetupBiometric) {
+      if (hasNotCompletedInitialSetup && hasNotSetupBiometric) {
         setNeedsBiometricSetup(true);
         setCurrentFlow('biometric-setup');
       } else {

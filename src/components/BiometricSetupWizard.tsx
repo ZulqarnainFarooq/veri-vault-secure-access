@@ -2,304 +2,249 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Shield, Fingerprint, Eye, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
-import { BiometricAuthService, BiometricCapabilities } from '@/lib/biometric-auth';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Shield, Fingerprint, Eye, CheckCircle, AlertCircle, ArrowRight, SkipForward } from 'lucide-react';
+import { BiometricAuthService } from '@/lib/biometric-auth';
 import { useAuth } from '@/hooks/useAuth';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface BiometricSetupWizardProps {
   onSetupComplete: () => void;
   onSkip: () => void;
 }
 
-type SetupStep = 'welcome' | 'choose-type' | 'setup-fingerprint' | 'setup-face' | 'complete';
-type BiometricType = 'fingerprint' | 'face' | 'both' | 'none';
+type SetupStep = 'welcome' | 'capability-check' | 'biometric-setup' | 'complete';
 
-const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
-  onSetupComplete,
-  onSkip
-}) => {
+const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({ onSetupComplete, onSkip }) => {
+  const { user, updateProfile } = useAuth();
   const [currentStep, setCurrentStep] = useState<SetupStep>('welcome');
-  const [capabilities, setCapabilities] = useState<BiometricCapabilities | null>(null);
-  const [selectedType, setSelectedType] = useState<BiometricType>('none');
-  const [isLoading, setIsLoading] = useState(false);
-  const { user, userProfile, updateProfile, logAuthEvent } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [biometricCapabilities, setBiometricCapabilities] = useState<any>(null);
+  const [selectedBiometricType, setSelectedBiometricType] = useState<'fingerprint' | 'face' | null>(null);
+  const [setupResult, setSetupResult] = useState<any>(null);
 
   useEffect(() => {
-    checkCapabilities();
-  }, []);
+    if (currentStep === 'capability-check') {
+      checkCapabilities();
+    }
+  }, [currentStep]);
 
   const checkCapabilities = async () => {
-    const caps = await BiometricAuthService.checkBiometricCapabilities();
-    setCapabilities(caps);
-  };
-
-  const handleSetupBiometric = async (type: 'fingerprint' | 'face') => {
-    if (!user) return;
-    
-    setIsLoading(true);
-    
+    setLoading(true);
     try {
-      console.log('Setting up biometric:', type);
-      const result = await BiometricAuthService.setupBiometric(user.id, type);
+      const capabilities = await BiometricAuthService.checkBiometricCapabilities();
+      setBiometricCapabilities(capabilities);
       
-      if (result.success) {
-        // Update user profile with biometric settings
-        await updateProfile({
-          biometric_enabled: true,
-          [`${type}_enabled`]: true,
-          last_biometric_setup: new Date().toISOString(),
-          initial_setup_complete: true
-        });
-        
-        await logAuthEvent('biometric_setup', true);
-        
-        setSelectedType(type);
-        setCurrentStep('complete');
+      if (capabilities.isAvailable) {
+        setCurrentStep('biometric-setup');
       } else {
-        await logAuthEvent('biometric_setup', false, result.error);
-        console.error('Biometric setup failed:', result.error);
+        setError(capabilities.errorMessage || 'Biometric authentication not available');
       }
     } catch (error) {
-      await logAuthEvent('biometric_setup', false, 'Setup error occurred');
-      console.error('Biometric setup error:', error);
+      setError('Failed to check biometric capabilities');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleSkipSetup = async () => {
+  const handleBiometricSetup = async (biometricType: 'fingerprint' | 'face') => {
+    if (!user) return;
+    
+    setLoading(true);
+    setError('');
+    setSelectedBiometricType(biometricType);
+
+    try {
+      const result = await BiometricAuthService.setupBiometric(user.id, biometricType);
+      
+      if (result.success) {
+        setSetupResult(result);
+        setCurrentStep('complete');
+      } else {
+        setError(result.error || 'Failed to setup biometric authentication');
+      }
+    } catch (error) {
+      setError('Setup failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSkip = async () => {
     if (user) {
       // Mark initial setup as complete even if skipped
-      await updateProfile({
-        initial_setup_complete: true
-      });
+      await updateProfile({ initial_setup_complete: true });
     }
     onSkip();
   };
 
-  const renderWelcomeStep = () => (
-    <div className="space-y-6">
-      <div className="text-center space-y-4">
-        <div className="flex justify-center">
-          <div className="p-4 bg-gradient-biometric rounded-full animate-biometric-glow">
-            <Shield className="h-12 w-12 text-biometric-foreground" />
-          </div>
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Secure Your Account</h2>
-          <p className="text-muted-foreground mt-2">
-            Add biometric authentication for enhanced security and convenience
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <div className="p-4 bg-muted/50 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <CheckCircle2 className="h-5 w-5 text-biometric mt-0.5" />
-            <div>
-              <p className="font-medium">Enhanced Security</p>
-              <p className="text-sm text-muted-foreground">Your biometric data never leaves your device</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="p-4 bg-muted/50 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <CheckCircle2 className="h-5 w-5 text-biometric mt-0.5" />
-            <div>
-              <p className="font-medium">Quick Access</p>
-              <p className="text-sm text-muted-foreground">Login instantly without typing passwords</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <Button
-          variant="security"
-          className="w-full"
-          onClick={() => setCurrentStep('choose-type')}
-        >
-          Setup Biometric Login
-          <ArrowRight className="h-4 w-4 ml-2" />
-        </Button>
-        
-        <Button
-          variant="ghost"
-          className="w-full"
-          onClick={handleSkipSetup}
-        >
-          Skip for Now
-        </Button>
-      </div>
-    </div>
-  );
-
-  const renderChooseTypeStep = () => {
-    if (!capabilities?.isAvailable) {
-      return (
-        <div className="space-y-6">
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Biometric authentication is not available on this device.
-            </AlertDescription>
-          </Alert>
-          
-          <Button variant="ghost" className="w-full" onClick={handleSkipSetup}>
-            Continue without Biometrics
-          </Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-6">
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-foreground">Choose Authentication Method</h2>
-          <p className="text-muted-foreground mt-2">
-            Select how you'd like to secure your account
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          {(capabilities.biometryType === 'fingerprint' || !capabilities.biometryType) && (
-            <Button
-              variant="outline"
-              className="w-full h-20 flex-col space-y-2"
-              onClick={() => {
-                setCurrentStep('setup-fingerprint');
-                handleSetupBiometric('fingerprint');
-              }}
-              disabled={isLoading}
-            >
-              <Fingerprint className="h-8 w-8" />
-              <span>Setup Fingerprint</span>
-            </Button>
-          )}
-
-          {capabilities.biometryType === 'face' && (
-            <Button
-              variant="outline"
-              className="w-full h-20 flex-col space-y-2"
-              onClick={() => {
-                setCurrentStep('setup-face');
-                handleSetupBiometric('face');
-              }}
-              disabled={isLoading}
-            >
-              <Eye className="h-8 w-8" />
-              <span>Setup Face ID</span>
-            </Button>
-          )}
-        </div>
-
-        <Button
-          variant="ghost"
-          className="w-full"
-          onClick={handleSkipSetup}
-          disabled={isLoading}
-        >
-          Skip for Now
-        </Button>
-      </div>
-    );
+  const handleComplete = () => {
+    onSetupComplete();
   };
 
-  const renderCompleteStep = () => (
-    <div className="space-y-6">
-      <div className="text-center space-y-4">
-        <div className="flex justify-center">
-          <div className="p-4 bg-gradient-biometric rounded-full">
-            <CheckCircle2 className="h-12 w-12 text-biometric-foreground" />
-          </div>
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Setup Complete!</h2>
-          <p className="text-muted-foreground mt-2">
-            {selectedType === 'face' ? 'Face ID' : 'Touch ID'} is now enabled for your account
-          </p>
-        </div>
-      </div>
-
-      <div className="p-4 bg-biometric/10 rounded-lg border border-biometric/20">
-        <div className="flex items-center space-x-3">
-          {selectedType === 'face' ? (
-            <Eye className="h-6 w-6 text-biometric" />
-          ) : (
-            <Fingerprint className="h-6 w-6 text-biometric" />
-          )}
-          <div>
-            <p className="font-medium">Biometric Login Active</p>
-            <p className="text-sm text-muted-foreground">
-              You can now use {selectedType === 'face' ? 'Face ID' : 'Touch ID'} to login
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <Button
-        variant="security"
-        className="w-full"
-        onClick={onSetupComplete}
-      >
-        Continue to App
-      </Button>
-    </div>
-  );
-
-  const renderCurrentStep = () => {
+  const getStepProgress = () => {
     switch (currentStep) {
-      case 'welcome':
-        return renderWelcomeStep();
-      case 'choose-type':
-        return renderChooseTypeStep();
-      case 'setup-fingerprint':
-      case 'setup-face':
-        return (
-          <div className="text-center space-y-4">
-            <div className="flex justify-center">
-              <div className={`p-4 rounded-full ${isLoading ? 'animate-pulse' : ''}`}>
-                {currentStep === 'setup-face' ? (
-                  <Eye className="h-12 w-12 text-biometric" />
-                ) : (
-                  <Fingerprint className="h-12 w-12 text-biometric" />
-                )}
-              </div>
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-foreground">
-                {isLoading ? 'Setting up...' : 'Setup in Progress'}
-              </h2>
-              <p className="text-muted-foreground mt-2">
-                {isLoading ? 'Please follow the device prompts' : 'Complete the biometric setup'}
-              </p>
-            </div>
-          </div>
-        );
-      case 'complete':
-        return renderCompleteStep();
-      default:
-        return renderWelcomeStep();
+      case 'welcome': return 25;
+      case 'capability-check': return 50;
+      case 'biometric-setup': return 75;
+      case 'complete': return 100;
+      default: return 0;
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-surface flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-xl border-0 bg-card/95 backdrop-blur-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-xl bg-gradient-security bg-clip-text text-transparent">
-            VeriVault Setup
-          </CardTitle>
-          <CardDescription>
-            Account: {user?.email || userProfile?.email}
-          </CardDescription>
+      <Card className="w-full max-w-lg shadow-xl border-0 bg-card/95 backdrop-blur-sm">
+        <CardHeader className="text-center space-y-4">
+          <div className="mx-auto p-3 bg-gradient-security rounded-full w-fit">
+            <Shield className="h-8 w-8 text-primary-foreground" />
+          </div>
+          <div>
+            <CardTitle className="text-2xl font-bold">Secure Your Account</CardTitle>
+            <CardDescription>
+              Set up biometric authentication for enhanced security
+            </CardDescription>
+          </div>
+          <Progress value={getStepProgress()} className="w-full" />
         </CardHeader>
 
-        <CardContent>
-          {renderCurrentStep()}
+        <CardContent className="space-y-6">
+          {currentStep === 'welcome' && (
+            <div className="space-y-6">
+              <div className="text-center space-y-4">
+                <h3 className="text-lg font-semibold">Welcome to VeriVault</h3>
+                <p className="text-muted-foreground">
+                  Let's set up biometric authentication to keep your account secure and make logging in faster.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-sm">Enhanced security protection</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-sm">Quick and convenient access</span>
+                </div>
+                <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <span className="text-sm">Your data stays on your device</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setCurrentStep('capability-check')}
+                  className="flex-1 bg-gradient-security hover:opacity-90"
+                >
+                  Get Started <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <Button variant="outline" onClick={handleSkip}>
+                  <SkipForward className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 'capability-check' && (
+            <div className="space-y-6">
+              <div className="text-center space-y-4">
+                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+                <h3 className="text-lg font-semibold">Checking Device Capabilities</h3>
+                <p className="text-muted-foreground">
+                  We're checking what biometric options are available on your device...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {currentStep === 'biometric-setup' && (
+            <div className="space-y-6">
+              <div className="text-center space-y-2">
+                <h3 className="text-lg font-semibold">Choose Your Biometric Method</h3>
+                <p className="text-muted-foreground">
+                  Select how you'd like to authenticate
+                </p>
+              </div>
+
+              {biometricCapabilities && (
+                <div className="space-y-3">
+                  <Button
+                    variant="outline"
+                    className="w-full h-16 flex items-center justify-between p-4"
+                    onClick={() => handleBiometricSetup('fingerprint')}
+                    disabled={loading}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Fingerprint className="h-6 w-6" />
+                      <div className="text-left">
+                        <div className="font-medium">Fingerprint</div>
+                        <div className="text-sm text-muted-foreground">Touch sensor authentication</div>
+                      </div>
+                    </div>
+                    <Badge variant="secondary">Recommended</Badge>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="w-full h-16 flex items-center justify-between p-4"
+                    onClick={() => handleBiometricSetup('face')}
+                    disabled={loading}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Eye className="h-6 w-6" />
+                      <div className="text-left">
+                        <div className="font-medium">Face Recognition</div>
+                        <div className="text-sm text-muted-foreground">Camera-based authentication</div>
+                      </div>
+                    </div>
+                  </Button>
+                </div>
+              )}
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button variant="ghost" onClick={handleSkip} className="w-full">
+                Skip for now
+              </Button>
+            </div>
+          )}
+
+          {currentStep === 'complete' && (
+            <div className="space-y-6">
+              <div className="text-center space-y-4">
+                <div className="mx-auto p-3 bg-green-500/10 rounded-full w-fit">
+                  <CheckCircle className="h-8 w-8 text-green-500" />
+                </div>
+                <h3 className="text-lg font-semibold">Setup Complete!</h3>
+                <p className="text-muted-foreground">
+                  {selectedBiometricType === 'fingerprint' ? 'Fingerprint' : 'Face recognition'} authentication 
+                  has been successfully configured for your account.
+                </p>
+              </div>
+
+              <div className="p-4 bg-secondary/50 rounded-lg">
+                <h4 className="font-medium mb-2">What's Next?</h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• Use your {selectedBiometricType} to log in quickly</li>
+                  <li>• Your biometric data stays secure on your device</li>
+                  <li>• You can always use your password as backup</li>
+                </ul>
+              </div>
+
+              <Button onClick={handleComplete} className="w-full bg-gradient-security hover:opacity-90">
+                Continue to VeriVault
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

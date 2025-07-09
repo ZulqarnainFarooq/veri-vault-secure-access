@@ -73,7 +73,28 @@ export class BiometricAuthService {
         };
       }
 
-      return enhancedBiometricService.authenticateWithBiometric(user.id);
+      // First check if user has stored credentials
+      const credentials = await this.getStoredCredentials();
+      if (!credentials) {
+        return {
+          success: false,
+          error: 'No stored biometric credentials',
+          requiresFallback: true
+        };
+      }
+
+      // Perform biometric authentication
+      const result = await enhancedBiometricService.authenticateWithBiometric(user.id);
+      
+      if (result.success) {
+        // Update last biometric login
+        await supabase
+          .from('profiles')
+          .update({ last_biometric_login: new Date().toISOString() })
+          .eq('id', user.id);
+      }
+
+      return result;
     } catch (error) {
       console.error('Authentication error:', error);
       return {
@@ -85,7 +106,37 @@ export class BiometricAuthService {
   }
 
   static async setupBiometric(userId: string, biometricType: 'fingerprint' | 'face'): Promise<BiometricSetupResult> {
-    return enhancedBiometricService.setupBiometric(userId, biometricType);
+    try {
+      const result = await enhancedBiometricService.setupBiometric(userId, biometricType);
+      
+      if (result.success) {
+        // Update profile with biometric setup information
+        const updates: any = {
+          biometric_enabled: true,
+          last_biometric_setup: new Date().toISOString(),
+          initial_setup_complete: true
+        };
+
+        if (biometricType === 'fingerprint') {
+          updates.fingerprint_enabled = true;
+        } else if (biometricType === 'face') {
+          updates.face_id_enabled = true;
+        }
+
+        await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', userId);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Setup error:', error);
+      return {
+        success: false,
+        error: 'Setup failed'
+      };
+    }
   }
 
   static async authenticateWithBiometric(userId: string): Promise<EnhancedBiometricResult> {
@@ -102,6 +153,26 @@ export class BiometricAuthService {
       }
 
       await enhancedBiometricService.disableBiometric(user.id, biometricType);
+
+      // Update profile to reflect disabled biometric
+      const updates: any = {};
+      
+      if (biometricType === 'fingerprint') {
+        updates.fingerprint_enabled = false;
+      } else if (biometricType === 'face') {
+        updates.face_id_enabled = false;
+      } else {
+        // Disable all biometric methods
+        updates.biometric_enabled = false;
+        updates.fingerprint_enabled = false;
+        updates.face_id_enabled = false;
+        updates.biometric_token = null;
+      }
+
+      await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
     } catch (error) {
       console.error('Error disabling biometric:', error);
     }
