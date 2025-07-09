@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -10,6 +11,7 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string, displayName?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signInWithBiometric: (biometricToken: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   updateProfile: (updates: any) => Promise<{ error: any }>;
@@ -29,6 +31,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state change:', event, session?.user?.id);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -47,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session?.user?.id);
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -72,12 +76,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error fetching profile:', error);
+        // Create profile if it doesn't exist
+        if (error.code === 'PGRST116') {
+          await createUserProfile(userId);
+        }
         return;
       }
 
       setUserProfile(data);
     } catch (error) {
       console.error('Error fetching user profile:', error);
+    }
+  };
+
+  const createUserProfile = async (userId: string) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+      
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          email: user.email || '',
+          display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || '',
+          biometric_enabled: false,
+          fingerprint_enabled: false,
+          face_id_enabled: false,
+          security_level: 'standard',
+          initial_setup_complete: false
+        });
+
+      if (error) {
+        console.error('Error creating profile:', error);
+      } else {
+        // Fetch the newly created profile
+        setTimeout(() => {
+          fetchUserProfile(userId);
+        }, 100);
+      }
+    } catch (error) {
+      console.error('Error creating user profile:', error);
     }
   };
 
@@ -108,7 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const redirectUrl = `${window.location.origin}/`;
       
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -124,10 +165,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error };
       }
 
-      toast({
-        title: "Account Created",
-        description: "Please check your email to verify your account.",
-      });
+      // If email confirmation is disabled, the user will be logged in immediately
+      if (data.user && !data.user.email_confirmed_at) {
+        toast({
+          title: "Account Created",
+          description: "Please check your email to verify your account.",
+        });
+      } else if (data.user && data.user.email_confirmed_at) {
+        toast({
+          title: "Account Created",
+          description: "Welcome to VeriVault! Setting up your account...",
+        });
+      }
 
       return { error: null };
     } catch (error) {
@@ -160,6 +209,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       await logAuthEvent('login', false, errorMessage);
+      return { error: { message: errorMessage } };
+    }
+  };
+
+  const signInWithBiometric = async (biometricToken: string) => {
+    try {
+      // In a real implementation, this would validate the biometric token
+      // and create a proper Supabase session
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('biometric_token', biometricToken)
+        .single();
+
+      if (!profiles) {
+        throw new Error('Invalid biometric credentials');
+      }
+
+      // For now, we'll use the stored session approach
+      // In production, you'd implement proper token-based authentication
+      await logAuthEvent('biometric_login', true);
+      
+      toast({
+        title: "Biometric Login Successful",
+        description: "Welcome back to VeriVault.",
+      });
+
+      return { error: null };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      await logAuthEvent('biometric_login', false, errorMessage);
       return { error: { message: errorMessage } };
     }
   };
@@ -239,6 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     signUp,
     signIn,
+    signInWithBiometric,
     signOut,
     resetPassword,
     updateProfile,

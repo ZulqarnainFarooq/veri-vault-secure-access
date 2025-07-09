@@ -1,5 +1,6 @@
 
 import { enhancedBiometricService, EnhancedBiometricResult, BiometricSetupResult } from '@/services/biometricService';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface BiometricCapabilities {
   isAvailable: boolean;
@@ -60,9 +61,27 @@ export class BiometricAuthService {
   }
 
   static async authenticate(biometricType: 'fingerprint' | 'face'): Promise<EnhancedBiometricResult> {
-    // This method was missing - adding it to match the component expectations
-    const userId = 'current-user'; // In a real app, get this from auth context
-    return enhancedBiometricService.authenticateWithBiometric(userId);
+    try {
+      // Get current user from Supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return {
+          success: false,
+          error: 'No authenticated user',
+          requiresFallback: true
+        };
+      }
+
+      return enhancedBiometricService.authenticateWithBiometric(user.id);
+    } catch (error) {
+      console.error('Authentication error:', error);
+      return {
+        success: false,
+        error: 'Authentication failed',
+        requiresFallback: true
+      };
+    }
   }
 
   static async setupBiometric(userId: string, biometricType: 'fingerprint' | 'face'): Promise<BiometricSetupResult> {
@@ -74,19 +93,84 @@ export class BiometricAuthService {
   }
 
   static async disableBiometricAuth(biometricType?: 'fingerprint' | 'face'): Promise<void> {
-    // This will be handled by the enhanced service through the dashboard
-    console.log('Biometric disabled:', biometricType);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('No authenticated user');
+        return;
+      }
+
+      await enhancedBiometricService.disableBiometric(user.id, biometricType);
+    } catch (error) {
+      console.error('Error disabling biometric:', error);
+    }
   }
 
   static async getEnabledBiometricTypes(): Promise<string[]> {
-    // Check localStorage for backward compatibility, but this should come from Supabase
-    const stored = localStorage.getItem('biometric_enabled_types');
-    return stored ? JSON.parse(stored) : [];
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return [];
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('fingerprint_enabled, face_id_enabled')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile) {
+        return [];
+      }
+
+      const types: string[] = [];
+      if (profile.fingerprint_enabled) types.push('fingerprint');
+      if (profile.face_id_enabled) types.push('face');
+      
+      return types;
+    } catch (error) {
+      console.error('Error getting enabled biometric types:', error);
+      return [];
+    }
   }
 
   static async getStoredCredentials(): Promise<{ userId: string; token: string } | null> {
-    // Check localStorage for backward compatibility, but this should come from Supabase
-    const stored = localStorage.getItem('biometric_credentials');
-    return stored ? JSON.parse(stored) : null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        return null;
+      }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('biometric_token')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile?.biometric_token) {
+        return null;
+      }
+
+      return {
+        userId: user.id,
+        token: profile.biometric_token
+      };
+    } catch (error) {
+      console.error('Error getting stored credentials:', error);
+      return null;
+    }
+  }
+
+  static async hasStoredCredentialsForUser(): Promise<boolean> {
+    try {
+      const credentials = await this.getStoredCredentials();
+      return !!credentials;
+    } catch (error) {
+      console.error('Error checking stored credentials:', error);
+      return false;
+    }
   }
 }

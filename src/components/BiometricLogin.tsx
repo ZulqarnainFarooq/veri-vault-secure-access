@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,8 +23,8 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [storedCredentials, setStoredCredentials] = useState<{ userId: string; token: string } | null>(null);
-  const { signIn, userProfile, logAuthEvent } = useAuth();
+  const [hasStoredCredentials, setHasStoredCredentials] = useState(false);
+  const { signIn, signInWithBiometric, logAuthEvent } = useAuth();
 
   useEffect(() => {
     initializeBiometrics();
@@ -40,18 +41,30 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
     setEnabledBiometricTypes(validTypes);
 
     // Check for stored credentials
-    if (validTypes.length > 0) {
-      const creds = await BiometricAuthService.getStoredCredentials();
-      setStoredCredentials(creds);
-    }
+    const hasCredentials = await BiometricAuthService.hasStoredCredentialsForUser();
+    setHasStoredCredentials(hasCredentials);
+
+    console.log('Biometric initialization:', {
+      capabilities: caps,
+      enabledTypes: validTypes,
+      hasCredentials
+    });
   };
 
   const handleBiometricSuccess = async () => {
-    if (storedCredentials) {
-      await logAuthEvent('biometric_auth', true);
-      // Biometric auth success - user will be automatically logged in via auth state
-    } else {
-      await logAuthEvent('biometric_auth', false, 'No stored credentials');
+    try {
+      const credentials = await BiometricAuthService.getStoredCredentials();
+      
+      if (credentials) {
+        await signInWithBiometric(credentials.token);
+        await logAuthEvent('biometric_auth', true);
+      } else {
+        await logAuthEvent('biometric_auth', false, 'No stored credentials');
+        setShowTraditionalLogin(true);
+      }
+    } catch (error) {
+      console.error('Biometric success handler error:', error);
+      await logAuthEvent('biometric_auth', false, 'Success handler error');
       setShowTraditionalLogin(true);
     }
   };
@@ -81,18 +94,6 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
     }
   };
 
-  const handleBiometricToggle = async (biometricType: 'fingerprint' | 'face', enabled: boolean) => {
-    if (!enabled) {
-      await BiometricAuthService.disableBiometricAuth(biometricType);
-      const updatedTypes = enabledBiometricTypes.filter(type => type !== biometricType);
-      setEnabledBiometricTypes(updatedTypes);
-      
-      if (updatedTypes.length === 0) {
-        setStoredCredentials(null);
-      }
-    }
-  };
-
   const getBiometricStatus = () => {
     if (!capabilities?.isAvailable) {
       return {
@@ -110,7 +111,7 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
       };
     }
 
-    if (enabledBiometricTypes.length > 0 && storedCredentials) {
+    if (enabledBiometricTypes.length > 0 && hasStoredCredentials) {
       return {
         icon: <CheckCircle2 className="h-4 w-4 text-biometric" />,
         message: "Biometric authentication is ready to use",
@@ -122,6 +123,11 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
   };
 
   const status = getBiometricStatus();
+  const showBiometricOptions = capabilities?.isAvailable && 
+                               capabilities.hasEnrolledBiometrics && 
+                               enabledBiometricTypes.length > 0 && 
+                               hasStoredCredentials && 
+                               !showTraditionalLogin;
 
   return (
     <div className="min-h-screen bg-gradient-surface flex items-center justify-center p-4">
@@ -154,7 +160,7 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
           )}
 
           {/* Biometric Authentication Buttons */}
-          {capabilities?.isAvailable && capabilities.hasEnrolledBiometrics && storedCredentials && !showTraditionalLogin && (
+          {showBiometricOptions && (
             <div className="text-center space-y-4">
               {enabledBiometricTypes.includes('fingerprint') && (
                 <FingerprintButton
@@ -187,7 +193,7 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
           )}
 
           {/* Traditional Login Form */}
-          {(showTraditionalLogin || !storedCredentials) && (
+          {(showTraditionalLogin || !showBiometricOptions) && (
             <form onSubmit={handleTraditionalLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -233,7 +239,7 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => 
                 </Button>
               )}
 
-              {showTraditionalLogin && storedCredentials && (
+              {showTraditionalLogin && showBiometricOptions && (
                 <Button
                   type="button"
                   variant="ghost"

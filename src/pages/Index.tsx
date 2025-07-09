@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import BiometricLogin from '@/components/BiometricLogin';
@@ -15,27 +16,42 @@ const Index = () => {
   const [needsBiometricSetup, setNeedsBiometricSetup] = useState(false);
 
   useEffect(() => {
+    console.log('Index useEffect - user:', user?.id, 'userProfile:', userProfile);
+    
     // Check if user needs biometric setup after registration
-    if (user && userProfile && !userProfile.biometric_enabled) {
-      const isNewUser = new Date(userProfile.created_at) > new Date(Date.now() - 5 * 60 * 1000); // 5 minutes
-      if (isNewUser) {
+    if (user && userProfile) {
+      const isNewUser = new Date(userProfile.created_at) > new Date(Date.now() - 10 * 60 * 1000); // 10 minutes
+      const hasNotSetupBiometric = !userProfile.biometric_enabled;
+      const hasNotCompletedInitialSetup = !userProfile.initial_setup_complete;
+      
+      console.log('Setup check:', {
+        isNewUser,
+        hasNotSetupBiometric,
+        hasNotCompletedInitialSetup,
+        createdAt: userProfile.created_at
+      });
+
+      if ((isNewUser || hasNotCompletedInitialSetup) && hasNotSetupBiometric) {
         setNeedsBiometricSetup(true);
         setCurrentFlow('biometric-setup');
+      } else {
+        setNeedsBiometricSetup(false);
       }
     }
   }, [user, userProfile]);
 
   const handleSignupSuccess = () => {
-    // After signup, user will be automatically logged in via auth state change
-    setNeedsBiometricSetup(true);
-    setCurrentFlow('biometric-setup');
+    console.log('Signup success - will check for biometric setup in useEffect');
+    // The useEffect will handle biometric setup detection
   };
 
   const handleBiometricSetupComplete = () => {
+    console.log('Biometric setup completed');
     setNeedsBiometricSetup(false);
   };
 
   const handleSkipBiometricSetup = () => {
+    console.log('Biometric setup skipped');
     setNeedsBiometricSetup(false);
   };
 

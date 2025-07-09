@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
     setIsLoading(true);
     
     try {
+      console.log('Setting up biometric:', type);
       const result = await BiometricAuthService.setupBiometric(user.id, type);
       
       if (result.success) {
@@ -46,7 +48,8 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
         await updateProfile({
           biometric_enabled: true,
           [`${type}_enabled`]: true,
-          last_biometric_setup: new Date().toISOString()
+          last_biometric_setup: new Date().toISOString(),
+          initial_setup_complete: true
         });
         
         await logAuthEvent('biometric_setup', true);
@@ -55,6 +58,7 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
         setCurrentStep('complete');
       } else {
         await logAuthEvent('biometric_setup', false, result.error);
+        console.error('Biometric setup failed:', result.error);
       }
     } catch (error) {
       await logAuthEvent('biometric_setup', false, 'Setup error occurred');
@@ -62,6 +66,16 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleSkipSetup = async () => {
+    if (user) {
+      // Mark initial setup as complete even if skipped
+      await updateProfile({
+        initial_setup_complete: true
+      });
+    }
+    onSkip();
   };
 
   const renderWelcomeStep = () => (
@@ -115,7 +129,7 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
         <Button
           variant="ghost"
           className="w-full"
-          onClick={onSkip}
+          onClick={handleSkipSetup}
         >
           Skip for Now
         </Button>
@@ -134,7 +148,7 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
             </AlertDescription>
           </Alert>
           
-          <Button variant="ghost" className="w-full" onClick={onSkip}>
+          <Button variant="ghost" className="w-full" onClick={handleSkipSetup}>
             Continue without Biometrics
           </Button>
         </div>
@@ -151,7 +165,7 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
         </div>
 
         <div className="space-y-3">
-          {capabilities.biometryType === 'fingerprint' && (
+          {(capabilities.biometryType === 'fingerprint' || !capabilities.biometryType) && (
             <Button
               variant="outline"
               className="w-full h-20 flex-col space-y-2"
@@ -185,7 +199,7 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
         <Button
           variant="ghost"
           className="w-full"
-          onClick={onSkip}
+          onClick={handleSkipSetup}
           disabled={isLoading}
         >
           Skip for Now
