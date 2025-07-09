@@ -54,13 +54,18 @@ export type Database = {
         Row: {
           avatar_url: string | null
           biometric_enabled: boolean | null
+          biometric_failures: number | null
+          biometric_locked_until: string | null
+          biometric_token: string | null
           created_at: string | null
           device_fingerprint: string | null
+          device_id: string | null
           display_name: string | null
           email: string
           face_id_enabled: boolean | null
           fingerprint_enabled: boolean | null
           id: string
+          last_biometric_login: string | null
           last_biometric_setup: string | null
           security_level: string | null
           updated_at: string | null
@@ -68,13 +73,18 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           biometric_enabled?: boolean | null
+          biometric_failures?: number | null
+          biometric_locked_until?: string | null
+          biometric_token?: string | null
           created_at?: string | null
           device_fingerprint?: string | null
+          device_id?: string | null
           display_name?: string | null
           email: string
           face_id_enabled?: boolean | null
           fingerprint_enabled?: boolean | null
           id: string
+          last_biometric_login?: string | null
           last_biometric_setup?: string | null
           security_level?: string | null
           updated_at?: string | null
@@ -82,16 +92,60 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           biometric_enabled?: boolean | null
+          biometric_failures?: number | null
+          biometric_locked_until?: string | null
+          biometric_token?: string | null
           created_at?: string | null
           device_fingerprint?: string | null
+          device_id?: string | null
           display_name?: string | null
           email?: string
           face_id_enabled?: boolean | null
           fingerprint_enabled?: boolean | null
           id?: string
+          last_biometric_login?: string | null
           last_biometric_setup?: string | null
           security_level?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_files: {
+        Row: {
+          file_name: string
+          file_size: number
+          file_type: string
+          id: string
+          is_encrypted: boolean | null
+          last_accessed: string | null
+          metadata: Json | null
+          storage_path: string
+          upload_date: string | null
+          user_id: string
+        }
+        Insert: {
+          file_name: string
+          file_size: number
+          file_type: string
+          id?: string
+          is_encrypted?: boolean | null
+          last_accessed?: string | null
+          metadata?: Json | null
+          storage_path: string
+          upload_date?: string | null
+          user_id: string
+        }
+        Update: {
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          is_encrypted?: boolean | null
+          last_accessed?: string | null
+          metadata?: Json | null
+          storage_path?: string
+          upload_date?: string | null
+          user_id?: string
         }
         Relationships: []
       }
