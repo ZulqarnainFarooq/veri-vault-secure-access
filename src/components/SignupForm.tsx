@@ -5,10 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Shield, Eye, EyeOff } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface SignupFormProps {
-  onSignupSuccess: (userId: string, email: string) => void;
+  onSignupSuccess: () => void;
   onBackToLogin: () => void;
 }
 
@@ -16,10 +16,11 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess, onBackToLogin 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const { toast } = useToast();
+  const { signUp } = useAuth();
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,17 +39,14 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess, onBackToLogin 
     setIsLoading(true);
 
     try {
-      // Simulate Firebase signup
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { error } = await signUp(email, password, displayName || undefined);
       
-      const userId = `user_${Date.now()}`;
-      
-      toast({
-        title: "Account Created Successfully",
-        description: "Welcome to VeriVault! Let's secure your account.",
-      });
+      if (error) {
+        setError(error.message);
+        return;
+      }
 
-      onSignupSuccess(userId, email);
+      onSignupSuccess();
     } catch (error) {
       setError('Failed to create account. Please try again.');
     } finally {
@@ -83,6 +81,17 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSignupSuccess, onBackToLogin 
           )}
 
           <form onSubmit={handleSignup} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="signup-display-name">Display Name</Label>
+              <Input
+                id="signup-display-name"
+                type="text"
+                placeholder="Enter your display name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="signup-email">Email</Label>
               <Input

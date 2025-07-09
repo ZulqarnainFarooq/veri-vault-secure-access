@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BiometricAuthService } from '@/lib/biometric-auth';
-import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   Shield, 
   LogOut, 
@@ -15,28 +15,21 @@ import {
   Smartphone
 } from 'lucide-react';
 
-interface DashboardProps {
-  userId: string;
-  onLogout: () => void;
-}
+interface DashboardProps {}
 
-const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
-  const { toast } = useToast();
+const Dashboard: React.FC<DashboardProps> = () => {
+  const { user, userProfile, signOut, updateProfile } = useAuth();
 
   const handleLogout = async () => {
-    await BiometricAuthService.clearSession();
-    toast({
-      title: "Logged Out",
-      description: "You have been securely logged out.",
-    });
-    onLogout();
+    await signOut();
   };
 
   const handleDisableBiometric = async () => {
     await BiometricAuthService.disableBiometricAuth();
-    toast({
-      title: "Biometric Authentication Disabled",
-      description: "Biometric login has been disabled for your account.",
+    await updateProfile({ 
+      biometric_enabled: false,
+      fingerprint_enabled: false,
+      face_id_enabled: false 
     });
   };
 
@@ -183,7 +176,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
               <div className="space-y-2">
                 <div className="text-sm">
                   <span className="font-medium">User ID:</span>
-                  <p className="text-muted-foreground font-mono text-xs break-all">{userId}</p>
+                  <p className="text-muted-foreground font-mono text-xs break-all">{user?.id}</p>
                 </div>
                 <div className="text-sm">
                   <span className="font-medium">Last Login:</span>

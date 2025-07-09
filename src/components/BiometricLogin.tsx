@@ -3,21 +3,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import FingerprintButton from './FingerprintButton';
 import FaceIDButton from './FaceIDButton';
 import { BiometricAuthService, BiometricCapabilities } from '@/lib/biometric-auth';
-import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { Shield, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface BiometricLoginProps {
-  onLogin: (userId: string) => void;
   onSwitchToSignup?: () => void;
 }
 
-const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSignup }) => {
+const BiometricLogin: React.FC<BiometricLoginProps> = ({ onSwitchToSignup }) => {
   const [capabilities, setCapabilities] = useState<BiometricCapabilities | null>(null);
   const [enabledBiometricTypes, setEnabledBiometricTypes] = useState<('fingerprint' | 'face')[]>([]);
   const [showTraditionalLogin, setShowTraditionalLogin] = useState(false);
@@ -25,7 +23,7 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [storedCredentials, setStoredCredentials] = useState<{ userId: string; token: string } | null>(null);
-  const { toast } = useToast();
+  const { signIn, userProfile, logAuthEvent } = useAuth();
 
   useEffect(() => {
     initializeBiometrics();
@@ -48,21 +46,19 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
     }
   };
 
-  const handleBiometricSuccess = () => {
+  const handleBiometricSuccess = async () => {
     if (storedCredentials) {
-      onLogin(storedCredentials.userId);
+      await logAuthEvent('biometric_auth', true);
+      // Biometric auth success - user will be automatically logged in via auth state
     } else {
-      toast({
-        variant: "destructive",
-        title: "No Stored Credentials",
-        description: "Please log in traditionally first to enable biometric authentication.",
-      });
+      await logAuthEvent('biometric_auth', false, 'No stored credentials');
       setShowTraditionalLogin(true);
     }
   };
 
-  const handleBiometricError = (error: string) => {
+  const handleBiometricError = async (error: string) => {
     console.error('Biometric authentication error:', error);
+    await logAuthEvent('biometric_auth', false, error);
     setShowTraditionalLogin(true);
   };
 
@@ -71,31 +67,15 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
     setIsLoading(true);
 
     try {
-      // Simulate authentication
-      if (email && password) {
-        const userId = `user_${Date.now()}`;
-        const token = `token_${Math.random().toString(36).substr(2, 9)}`;
-        
-        // Enable biometric auth if available
-        if (capabilities?.isAvailable && capabilities.hasEnrolledBiometrics) {
-          const biometricType = capabilities.biometryType === 'face' ? 'face' : 'fingerprint';
-          await BiometricAuthService.enableBiometricAuth(userId, token, biometricType);
-          toast({
-            title: "Biometric Authentication Enabled",
-            description: "You can now use biometric authentication for future logins.",
-          });
-        }
-
-        onLogin(userId);
-      } else {
-        throw new Error('Please enter both email and password');
+      const { error } = await signIn(email, password);
+      
+      if (error) {
+        throw error;
       }
+
+      // User will be automatically redirected via auth state change
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: error instanceof Error ? error.message : 'Login failed',
-      });
+      console.error('Login error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -110,11 +90,6 @@ const BiometricLogin: React.FC<BiometricLoginProps> = ({ onLogin, onSwitchToSign
       if (updatedTypes.length === 0) {
         setStoredCredentials(null);
       }
-      
-      toast({
-        title: "Biometric Authentication Disabled",
-        description: `${biometricType === 'face' ? 'Face ID' : 'Touch ID'} has been disabled.`,
-      });
     }
   };
 

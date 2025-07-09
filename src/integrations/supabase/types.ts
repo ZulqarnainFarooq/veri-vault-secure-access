@@ -14,7 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      auth_logs: {
+        Row: {
+          created_at: string | null
+          device_info: Json | null
+          error_message: string | null
+          event_type: string
+          id: string
+          ip_address: unknown | null
+          success: boolean | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          device_info?: Json | null
+          error_message?: string | null
+          event_type: string
+          id?: string
+          ip_address?: unknown | null
+          success?: boolean | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          device_info?: Json | null
+          error_message?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: unknown | null
+          success?: boolean | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          biometric_enabled: boolean | null
+          created_at: string | null
+          device_fingerprint: string | null
+          display_name: string | null
+          email: string
+          face_id_enabled: boolean | null
+          fingerprint_enabled: boolean | null
+          id: string
+          last_biometric_setup: string | null
+          security_level: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          biometric_enabled?: boolean | null
+          created_at?: string | null
+          device_fingerprint?: string | null
+          display_name?: string | null
+          email: string
+          face_id_enabled?: boolean | null
+          fingerprint_enabled?: boolean | null
+          id: string
+          last_biometric_setup?: string | null
+          security_level?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          biometric_enabled?: boolean | null
+          created_at?: string | null
+          device_fingerprint?: string | null
+          display_name?: string | null
+          email?: string
+          face_id_enabled?: boolean | null
+          fingerprint_enabled?: boolean | null
+          id?: string
+          last_biometric_setup?: string | null
+          security_level?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -4,11 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Shield, Fingerprint, Eye, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 import { BiometricAuthService, BiometricCapabilities } from '@/lib/biometric-auth';
-import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface BiometricSetupWizardProps {
-  userId: string;
-  userEmail: string;
   onSetupComplete: () => void;
   onSkip: () => void;
 }
@@ -17,8 +15,6 @@ type SetupStep = 'welcome' | 'choose-type' | 'setup-fingerprint' | 'setup-face' 
 type BiometricType = 'fingerprint' | 'face' | 'both' | 'none';
 
 const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
-  userId,
-  userEmail,
   onSetupComplete,
   onSkip
 }) => {
@@ -26,7 +22,7 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
   const [capabilities, setCapabilities] = useState<BiometricCapabilities | null>(null);
   const [selectedType, setSelectedType] = useState<BiometricType>('none');
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const { user, userProfile, updateProfile, logAuthEvent } = useAuth();
 
   useEffect(() => {
     checkCapabilities();
@@ -38,32 +34,31 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
   };
 
   const handleSetupBiometric = async (type: 'fingerprint' | 'face') => {
+    if (!user) return;
+    
     setIsLoading(true);
     
     try {
-      const result = await BiometricAuthService.setupBiometric(userId, type);
+      const result = await BiometricAuthService.setupBiometric(user.id, type);
       
       if (result.success) {
-        toast({
-          title: "Biometric Setup Successful",
-          description: `${type === 'face' ? 'Face ID' : 'Touch ID'} has been enabled for your account.`,
+        // Update user profile with biometric settings
+        await updateProfile({
+          biometric_enabled: true,
+          [`${type}_enabled`]: true,
+          last_biometric_setup: new Date().toISOString()
         });
+        
+        await logAuthEvent('biometric_setup', true);
         
         setSelectedType(type);
         setCurrentStep('complete');
       } else {
-        toast({
-          variant: "destructive",
-          title: "Setup Failed",
-          description: result.error || 'Failed to setup biometric authentication',
-        });
+        await logAuthEvent('biometric_setup', false, result.error);
       }
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Setup Error",
-        description: 'An error occurred during biometric setup',
-      });
+      await logAuthEvent('biometric_setup', false, 'Setup error occurred');
+      console.error('Biometric setup error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -285,7 +280,7 @@ const BiometricSetupWizard: React.FC<BiometricSetupWizardProps> = ({
             VeriVault Setup
           </CardTitle>
           <CardDescription>
-            Account: {userEmail}
+            Account: {user?.email || userProfile?.email}
           </CardDescription>
         </CardHeader>
 
