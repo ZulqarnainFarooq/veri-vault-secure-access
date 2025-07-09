@@ -1,11 +1,11 @@
-
 import React, { useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, File, X, CheckCircle2, AlertCircle } from 'lucide-react';
-import { fileService, FileUpload } from '@/services/fileService';
+import { fileService } from '@/services/fileService';
+import type { FileUpload as FileUploadType } from '@/services/fileService';
 import { useAuth } from '@/hooks/useAuth';
 
 interface FileUploadProps {
@@ -20,7 +20,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
   maxSizeMB = 10 
 }) => {
   const { user } = useAuth();
-  const [uploads, setUploads] = useState<FileUpload[]>([]);
+  const [uploads, setUploads] = useState<FileUploadType[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -62,7 +62,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         continue;
       }
 
-      const uploadItem: FileUpload = {
+      const uploadItem: FileUploadType = {
         file,
         progress: 0,
         status: 'uploading'

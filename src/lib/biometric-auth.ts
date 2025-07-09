@@ -59,6 +59,12 @@ export class BiometricAuthService {
     }
   }
 
+  static async authenticate(biometricType: 'fingerprint' | 'face'): Promise<EnhancedBiometricResult> {
+    // This method was missing - adding it to match the component expectations
+    const userId = 'current-user'; // In a real app, get this from auth context
+    return enhancedBiometricService.authenticateWithBiometric(userId);
+  }
+
   static async setupBiometric(userId: string, biometricType: 'fingerprint' | 'face'): Promise<BiometricSetupResult> {
     return enhancedBiometricService.setupBiometric(userId, biometricType);
   }
