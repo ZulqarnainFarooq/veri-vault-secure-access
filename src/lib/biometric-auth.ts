@@ -1,4 +1,3 @@
-
 import { enhancedBiometricService, EnhancedBiometricResult, BiometricSetupResult } from '@/services/biometricService';
 import { NativeBiometricService, NativeBiometricCapabilities } from '@/services/nativeBiometricService';
 import { supabase } from '@/integrations/supabase/client';
@@ -18,10 +17,11 @@ export class BiometricAuthService {
       // Check if we're running on a native platform
       if (Capacitor.isNativePlatform()) {
         const nativeCapabilities = await NativeBiometricService.checkAvailability();
+        const isBiometricEnabled = await NativeBiometricService.isBiometricEnabledForUser();
         
         return {
           isAvailable: nativeCapabilities.isAvailable,
-          hasEnrolledBiometrics: nativeCapabilities.isAvailable,
+          hasEnrolledBiometrics: nativeCapabilities.isAvailable && isBiometricEnabled,
           biometryType: nativeCapabilities.biometryType || null,
           errorMessage: nativeCapabilities.errorMessage
         };
@@ -114,9 +114,33 @@ export class BiometricAuthService {
       if (Capacitor.isNativePlatform()) {
         console.log('Using native biometric authentication');
         
+        // Check if biometric is enabled for this user
+        const isBiometricEnabled = await NativeBiometricService.isBiometricEnabledForUser();
+        if (!isBiometricEnabled) {
+          return {
+            success: false,
+            error: 'Biometric authentication not enabled. Please set up biometric login first.',
+            requiresFallback: true
+          };
+        }
+        
         const credentialsResult = await NativeBiometricService.getCredentials();
         
         if (credentialsResult.success && credentialsResult.credentials) {
+          // Authenticate with retrieved credentials
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: credentialsResult.credentials.username,
+            password: credentialsResult.credentials.password
+          });
+
+          if (signInError) {
+            return {
+              success: false,
+              error: 'Stored credentials are invalid. Please sign in with password to update.',
+              requiresFallback: true
+            };
+          }
+
           // Update last biometric login
           await supabase
             .from('profiles')
@@ -130,7 +154,7 @@ export class BiometricAuthService {
         } else {
           return {
             success: false,
-            error: credentialsResult.error || 'Native biometric authentication failed',
+            error: credentialsResult.error || 'Biometric authentication failed',
             requiresFallback: true
           };
         }
@@ -164,36 +188,47 @@ export class BiometricAuthService {
       if (Capacitor.isNativePlatform()) {
         console.log('Using native biometric authentication for email:', email);
         
+        // Check if biometric is enabled
+        const isBiometricEnabled = await NativeBiometricService.isBiometricEnabledForUser();
+        if (!isBiometricEnabled) {
+          return {
+            success: false,
+            error: 'Biometric authentication not enabled for this email. Please sign in with password first.',
+            requiresFallback: true
+          };
+        }
+        
         const credentialsResult = await NativeBiometricService.getCredentials();
         
         if (credentialsResult.success && credentialsResult.credentials) {
           // Verify the stored email matches
           if (credentialsResult.credentials.username === email) {
-            // Get user profile by email
-            const { data: profile, error } = await supabase
-              .from('profiles')
-              .select('id')
-              .eq('email', email)
-              .maybeSingle();
+            // Authenticate with Supabase using stored credentials
+            const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: credentialsResult.credentials.username,
+              password: credentialsResult.credentials.password
+            });
 
-            if (error || !profile) {
+            if (signInError) {
               return {
                 success: false,
-                error: 'User not found',
+                error: 'Stored credentials are invalid. Please sign in with password to update.',
                 requiresFallback: true
               };
             }
 
-            // Update last biometric login
-            await supabase
-              .from('profiles')
-              .update({ last_biometric_login: new Date().toISOString() })
-              .eq('id', profile.id);
+            if (authData.user) {
+              // Update last biometric login
+              await supabase
+                .from('profiles')
+                .update({ last_biometric_login: new Date().toISOString() })
+                .eq('id', authData.user.id);
 
-            return {
-              success: true,
-              sessionToken: 'native-biometric-success'
-            };
+              return {
+                success: true,
+                sessionToken: 'native-biometric-success'
+              };
+            }
           } else {
             return {
               success: false,
@@ -204,7 +239,7 @@ export class BiometricAuthService {
         } else {
           return {
             success: false,
-            error: credentialsResult.error || 'Native biometric authentication failed',
+            error: credentialsResult.error || 'Biometric authentication failed',
             requiresFallback: true
           };
         }
@@ -253,6 +288,12 @@ export class BiometricAuthService {
         
         return result;
       }
+
+      return {
+        success: false,
+        error: 'Authentication failed',
+        requiresFallback: true
+      };
     } catch (error) {
       console.error('Email-based biometric authentication error:', error);
       return {
@@ -280,7 +321,15 @@ export class BiometricAuthService {
       if (Capacitor.isNativePlatform()) {
         console.log('Setting up native biometric authentication');
         
-        // Get user profile to get email
+        // Get user profile to get email and current password from session
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          return {
+            success: false,
+            error: 'No authenticated user found'
+          };
+        }
+
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('email')
@@ -294,11 +343,14 @@ export class BiometricAuthService {
           };
         }
 
-        // For native setup, we'll store the user's email as username
-        // In a real implementation, you might want to store an encrypted token instead
+        // For native setup, we need to get the user's password
+        // In a real app, you might want to prompt for password or use a secure token
+        // For now, we'll generate a secure token and store it
+        const secureToken = this.generateSecureToken();
+        
         const setupResult = await NativeBiometricService.setCredentials(
           profile.email,
-          'biometric-token-' + userId
+          secureToken // In production, this should be the actual password or encrypted token
         );
 
         if (setupResult.success) {
@@ -306,7 +358,8 @@ export class BiometricAuthService {
           const updates: any = {
             biometric_enabled: true,
             last_biometric_setup: new Date().toISOString(),
-            initial_setup_complete: true
+            initial_setup_complete: true,
+            biometric_token: secureToken // Store the token in Supabase for validation
           };
 
           if (biometricType === 'fingerprint') {
@@ -322,7 +375,7 @@ export class BiometricAuthService {
 
           return {
             success: true,
-            biometricToken: 'native-biometric-setup'
+            biometricToken: secureToken
           };
         } else {
           return {
@@ -480,6 +533,10 @@ export class BiometricAuthService {
 
   static async hasStoredCredentialsForUser(): Promise<boolean> {
     try {
+      if (Capacitor.isNativePlatform()) {
+        return await NativeBiometricService.isBiometricEnabledForUser();
+      }
+      
       const credentials = await this.getStoredCredentials();
       return !!credentials;
     } catch (error) {

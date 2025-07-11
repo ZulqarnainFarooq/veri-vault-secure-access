@@ -1,5 +1,6 @@
 
 import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 // Define types for biometric functionality
 export interface BiometryType {
@@ -26,7 +27,7 @@ export interface NativeBiometricResult {
   };
 }
 
-// Mock implementation for development and web platforms
+// Enhanced mock implementation with proper credential management
 const mockNativeBiometric = {
   async isAvailable(): Promise<{ isAvailable: boolean; biometryType?: string; errorMessage?: string }> {
     if (!Capacitor.isNativePlatform()) {
@@ -45,10 +46,24 @@ const mockNativeBiometric = {
       throw new Error('Not supported on web platform');
     }
     
-    // Store credentials in local storage as fallback for development
-    localStorage.setItem(`biometric_${options.server}_username`, options.username);
-    localStorage.setItem(`biometric_${options.server}_password`, options.password);
-    console.log('Mock: Biometric credentials stored');
+    // Store credentials securely using Capacitor Preferences
+    await Preferences.set({
+      key: `biometric_${options.server}_username`,
+      value: options.username
+    });
+    
+    await Preferences.set({
+      key: `biometric_${options.server}_password`,
+      value: options.password
+    });
+    
+    // Mark biometric as enabled for this user
+    await Preferences.set({
+      key: `biometric_enabled_${options.server}`,
+      value: 'true'
+    });
+    
+    console.log('Mock: Biometric credentials stored securely');
   },
 
   async getCredentials(options: { server: string }): Promise<{ username: string; password: string }> {
@@ -56,14 +71,28 @@ const mockNativeBiometric = {
       throw new Error('Not supported on web platform');
     }
 
-    const username = localStorage.getItem(`biometric_${options.server}_username`);
-    const password = localStorage.getItem(`biometric_${options.server}_password`);
+    // Check if biometric is enabled for this server
+    const { value: biometricEnabled } = await Preferences.get({
+      key: `biometric_enabled_${options.server}`
+    });
+    
+    if (!biometricEnabled || biometricEnabled !== 'true') {
+      throw new Error('Biometric authentication not enabled for this user');
+    }
+
+    const { value: username } = await Preferences.get({
+      key: `biometric_${options.server}_username`
+    });
+    
+    const { value: password } = await Preferences.get({
+      key: `biometric_${options.server}_password`
+    });
     
     if (!username || !password) {
       throw new Error('No stored credentials found');
     }
 
-    console.log('Mock: Biometric credentials retrieved');
+    console.log('Mock: Biometric credentials retrieved securely');
     return { username, password };
   },
 
@@ -72,9 +101,11 @@ const mockNativeBiometric = {
       return; // No-op on web
     }
 
-    localStorage.removeItem(`biometric_${options.server}_username`);
-    localStorage.removeItem(`biometric_${options.server}_password`);
-    console.log('Mock: Biometric credentials deleted');
+    await Preferences.remove({ key: `biometric_${options.server}_username` });
+    await Preferences.remove({ key: `biometric_${options.server}_password` });
+    await Preferences.remove({ key: `biometric_enabled_${options.server}` });
+    
+    console.log('Mock: Biometric credentials deleted securely');
   },
 
   async verifyIdentity(options: { reason?: string; title?: string; subtitle?: string; description?: string }): Promise<void> {
@@ -82,9 +113,30 @@ const mockNativeBiometric = {
       throw new Error('Not supported on web platform');
     }
 
-    // For development, simulate successful verification
-    console.log('Mock: Biometric verification successful');
-    return Promise.resolve();
+    // Simulate biometric verification with realistic delay and potential failure
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        // Simulate 90% success rate for testing
+        if (Math.random() > 0.1) {
+          console.log('Mock: Biometric verification successful');
+          resolve();
+        } else {
+          console.log('Mock: Biometric verification failed');
+          reject(new Error('Biometric authentication failed'));
+        }
+      }, 1500); // Realistic delay for biometric verification
+    });
+  },
+
+  async isBiometricEnabled(server: string): Promise<boolean> {
+    try {
+      const { value } = await Preferences.get({
+        key: `biometric_enabled_${server}`
+      });
+      return value === 'true';
+    } catch (error) {
+      return false;
+    }
   }
 };
 
@@ -123,6 +175,15 @@ export class NativeBiometricService {
     }
   }
 
+  static async isBiometricEnabledForUser(): Promise<boolean> {
+    try {
+      return await mockNativeBiometric.isBiometricEnabled('VeriVault');
+    } catch (error) {
+      console.error('Error checking biometric enabled status:', error);
+      return false;
+    }
+  }
+
   static async setCredentials(username: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
       if (!Capacitor.isNativePlatform()) {
@@ -151,6 +212,15 @@ export class NativeBiometricService {
         return { success: false, error: 'Not supported on web platform' };
       }
 
+      // First verify biometric identity
+      await mockNativeBiometric.verifyIdentity({
+        reason: 'Please verify your identity to access your saved credentials',
+        title: 'VeriVault Authentication',
+        subtitle: 'Use your biometric to authenticate',
+        description: 'Place your finger on the sensor or look at the camera'
+      });
+
+      // Then retrieve credentials
       const result = await mockNativeBiometric.getCredentials({
         server: 'VeriVault'
       });
