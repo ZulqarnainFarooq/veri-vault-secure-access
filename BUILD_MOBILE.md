@@ -94,16 +94,21 @@
 
 ## Current Biometric Implementation
 
-The current implementation uses a fallback biometric service that:
-- Detects native platform capabilities
-- Uses localStorage for credential storage in development
+The current implementation uses a development-friendly biometric service that:
+- Detects native platform capabilities using Capacitor core
+- Uses localStorage for credential storage in development/testing
 - Provides mock biometric verification for testing
-- Will work with actual native biometric APIs when deployed
+- Logs biometric operations to console for debugging
+- Will work as a foundation for integrating actual native biometric APIs
 
-For production deployment, you may want to integrate with:
-- Android BiometricPrompt API
+**Note:** This implementation provides a complete foundation that can be enhanced with actual native biometric plugins when needed for production deployment.
+
+## Production Enhancement
+
+For production deployment with real biometric authentication, consider integrating:
+- Native Android BiometricPrompt API
 - iOS LocalAuthentication framework
-- Or use a more robust Capacitor biometric plugin
+- Third-party Capacitor biometric plugins (when available)
 
 ## Production Build
 
@@ -120,8 +125,8 @@ For production deployment, you may want to integrate with:
 ### Common Issues
 
 1. **Biometric not working**
-   - Ensure device has biometric hardware enrolled
-   - Check permissions in device settings
+   - Check console logs for mock biometric operations
+   - Ensure device has biometric hardware enrolled (for real devices)
    - Verify AndroidManifest.xml includes biometric permissions
 
 2. **Build failures**
@@ -137,6 +142,7 @@ For production deployment, you may want to integrate with:
 - **Android**: Use `adb logcat` or Android Studio logcat
 - **iOS**: Use Xcode console or Safari Web Inspector
 - **Web debugging**: Enable USB debugging for mobile Chrome DevTools
+- **Biometric logs**: Check browser/device console for mock biometric operations
 
 ## Hot Reload Development
 
@@ -151,4 +157,4 @@ For development with hot reload:
 3. Verify authentication persistence across app restarts
 4. Test app performance and battery usage
 5. Prepare for app store submission if needed
-6. Consider integrating with native biometric APIs for production use
+6. Consider integrating with production-ready native biometric APIs

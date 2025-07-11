@@ -26,7 +26,7 @@ export interface NativeBiometricResult {
   };
 }
 
-// Mock implementation for web/development
+// Mock implementation for development and web platforms
 const mockNativeBiometric = {
   async isAvailable(): Promise<{ isAvailable: boolean; biometryType?: string; errorMessage?: string }> {
     if (!Capacitor.isNativePlatform()) {
@@ -45,9 +45,10 @@ const mockNativeBiometric = {
       throw new Error('Not supported on web platform');
     }
     
-    // Store credentials in local storage as fallback
+    // Store credentials in local storage as fallback for development
     localStorage.setItem(`biometric_${options.server}_username`, options.username);
     localStorage.setItem(`biometric_${options.server}_password`, options.password);
+    console.log('Mock: Biometric credentials stored');
   },
 
   async getCredentials(options: { server: string }): Promise<{ username: string; password: string }> {
@@ -62,6 +63,7 @@ const mockNativeBiometric = {
       throw new Error('No stored credentials found');
     }
 
+    console.log('Mock: Biometric credentials retrieved');
     return { username, password };
   },
 
@@ -72,6 +74,7 @@ const mockNativeBiometric = {
 
     localStorage.removeItem(`biometric_${options.server}_username`);
     localStorage.removeItem(`biometric_${options.server}_password`);
+    console.log('Mock: Biometric credentials deleted');
   },
 
   async verifyIdentity(options: { reason?: string; title?: string; subtitle?: string; description?: string }): Promise<void> {
@@ -79,8 +82,8 @@ const mockNativeBiometric = {
       throw new Error('Not supported on web platform');
     }
 
-    // For now, simulate successful verification
-    // In a real app, this would trigger the native biometric prompt
+    // For development, simulate successful verification
+    console.log('Mock: Biometric verification successful');
     return Promise.resolve();
   }
 };
