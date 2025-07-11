@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import BiometricLogin from '@/components/BiometricLogin';
+import EnhancedBiometricLogin from '@/components/EnhancedBiometricLogin';
 import SignupForm from '@/components/SignupForm';
 import BiometricSetupWizard from '@/components/BiometricSetupWizard';
 import Dashboard from '@/components/Dashboard';
@@ -109,7 +109,7 @@ const Index = () => {
     
     default:
       return (
-        <BiometricLogin 
+        <EnhancedBiometricLogin 
           onSwitchToSignup={handleSwitchToSignup}
         />
       );

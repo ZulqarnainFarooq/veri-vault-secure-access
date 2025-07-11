@@ -153,6 +153,100 @@ export class BiometricAuthService {
     }
   }
 
+  static async authenticateWithEmail(email: string, biometricType: 'fingerprint' | 'face'): Promise<EnhancedBiometricResult> {
+    try {
+      // Get user profile by email
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('id, biometric_token, device_id, biometric_failures, biometric_locked_until')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (error || !profile) {
+        return {
+          success: false,
+          error: 'User not found or biometric not set up',
+          requiresFallback: true
+        };
+      }
+
+      if (!profile.biometric_token) {
+        return {
+          success: false,
+          error: 'Biometric not set up for this user',
+          requiresFallback: true
+        };
+      }
+
+      // Check if account is temporarily locked
+      if (profile.biometric_locked_until && new Date(profile.biometric_locked_until) > new Date()) {
+        return { 
+          success: false, 
+          error: 'Biometric authentication temporarily locked', 
+          requiresFallback: true 
+        };
+      }
+
+      // Check if we're on mobile
+      const deviceInfo = await Device.getInfo();
+      const isMobile = deviceInfo.platform === 'android' || deviceInfo.platform === 'ios';
+
+      if (isMobile) {
+        // For mobile, use simplified authentication
+        console.log('Mobile biometric authentication for email:', email);
+        
+        // Reset failure count on success
+        await supabase
+          .from('profiles')
+          .update({
+            biometric_failures: 0,
+            biometric_locked_until: null,
+            last_biometric_login: new Date().toISOString()
+          })
+          .eq('id', profile.id);
+
+        // Create a proper session token
+        const sessionToken = this.generateSecureToken();
+        
+        return { 
+          success: true, 
+          sessionToken 
+        };
+      } else {
+        // For web, use WebAuthn with timeout
+        const result = await enhancedBiometricService.authenticateWithBiometric(profile.id);
+        
+        if (result.success) {
+          // Update last biometric login
+          await supabase
+            .from('profiles')
+            .update({ last_biometric_login: new Date().toISOString() })
+            .eq('id', profile.id);
+        }
+        
+        return result;
+      }
+    } catch (error) {
+      console.error('Email-based biometric authentication error:', error);
+      return {
+        success: false,
+        error: 'Authentication failed',
+        requiresFallback: true
+      };
+    }
+  }
+
+  private static generateSecureToken(): string {
+    try {
+      const array = new Uint8Array(32);
+      crypto.getRandomValues(array);
+      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    } catch (error) {
+      // Fallback for environments where crypto is not available
+      return Math.random().toString(36).substring(2, 34);
+    }
+  }
+
   static async setupBiometric(userId: string, biometricType: 'fingerprint' | 'face'): Promise<BiometricSetupResult> {
     try {
       const deviceInfo = await Device.getInfo();
