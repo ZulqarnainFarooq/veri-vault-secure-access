@@ -1,7 +1,6 @@
 
 import { NativeBiometric, BiometryType } from '@capacitor-community/native-biometric';
 import { Capacitor } from '@capacitor/core';
-import { supabase } from '@/integrations/supabase/client';
 
 export interface NativeBiometricCapabilities {
   isAvailable: boolean;

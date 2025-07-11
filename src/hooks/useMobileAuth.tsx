@@ -1,171 +1,178 @@
 
 import { useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/useAuth';
-import { BiometricAuthService } from '@/lib/biometric-auth';
-import { NativeBiometricService } from '@/services/nativeBiometricService';
 import { Capacitor } from '@capacitor/core';
-import { useToast } from '@/hooks/use-toast';
+import { Device } from '@capacitor/device';
+import { BiometricAuthService } from '@/lib/biometric-auth';
+import { supabase } from '@/integrations/supabase/client';
 
-export interface MobileAuthCapabilities {
+export interface MobileAuthState {
   isNativePlatform: boolean;
-  biometricAvailable: boolean;
-  biometricType: string | null;
-  hasStoredCredentials: boolean;
+  deviceInfo: any;
+  biometricCapabilities: {
+    isAvailable: boolean;
+    hasEnrolledBiometrics: boolean;
+    biometryType: string | null;
+    errorMessage?: string;
+  } | null;
+  isLoading: boolean;
+  error: string | null;
 }
 
-export const useMobileAuth = () => {
-  const { signIn, signInWithBiometric } = useAuth();
-  const { toast } = useToast();
-  const [capabilities, setCapabilities] = useState<MobileAuthCapabilities>({
+export interface MobileAuthActions {
+  checkBiometricCapabilities: () => Promise<void>;
+  authenticateWithBiometric: (biometricType: 'fingerprint' | 'face') => Promise<boolean>;
+  setupBiometric: (userId: string, biometricType: 'fingerprint' | 'face') => Promise<boolean>;
+  disableBiometric: (biometricType?: 'fingerprint' | 'face') => Promise<void>;
+  refreshDeviceInfo: () => Promise<void>;
+}
+
+export function useMobileAuth(): MobileAuthState & MobileAuthActions {
+  const [state, setState] = useState<MobileAuthState>({
     isNativePlatform: false,
-    biometricAvailable: false,
-    biometricType: null,
-    hasStoredCredentials: false
+    deviceInfo: null,
+    biometricCapabilities: null,
+    isLoading: true,
+    error: null
   });
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    checkCapabilities();
+    initializeMobileAuth();
   }, []);
 
-  const checkCapabilities = async () => {
+  const initializeMobileAuth = async () => {
     try {
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      
       const isNative = Capacitor.isNativePlatform();
-      const biometricCaps = await BiometricAuthService.checkBiometricCapabilities();
-      const hasCredentials = await BiometricAuthService.hasStoredCredentialsForUser();
-
-      setCapabilities({
+      const deviceInfo = await Device.getInfo();
+      
+      setState(prev => ({
+        ...prev,
         isNativePlatform: isNative,
-        biometricAvailable: biometricCaps.isAvailable,
-        biometricType: biometricCaps.biometryType,
-        hasStoredCredentials: hasCredentials
-      });
+        deviceInfo
+      }));
+
+      // Check biometric capabilities
+      await checkBiometricCapabilities();
     } catch (error) {
-      console.error('Error checking auth capabilities:', error);
+      console.error('Error initializing mobile auth:', error);
+      setState(prev => ({
+        ...prev,
+        error: 'Failed to initialize mobile authentication',
+        isLoading: false
+      }));
     }
   };
 
-  const authenticateWithBiometric = async (biometricType: 'fingerprint' | 'face') => {
-    setLoading(true);
+  const checkBiometricCapabilities = async () => {
     try {
+      setState(prev => ({ ...prev, isLoading: true }));
+      
+      const capabilities = await BiometricAuthService.checkBiometricCapabilities();
+      
+      setState(prev => ({
+        ...prev,
+        biometricCapabilities: capabilities,
+        isLoading: false
+      }));
+    } catch (error) {
+      console.error('Error checking biometric capabilities:', error);
+      setState(prev => ({
+        ...prev,
+        error: 'Failed to check biometric capabilities',
+        isLoading: false
+      }));
+    }
+  };
+
+  const authenticateWithBiometric = async (biometricType: 'fingerprint' | 'face'): Promise<boolean> => {
+    try {
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      
       const result = await BiometricAuthService.authenticate(biometricType);
       
-      if (result.success) {
-        if (capabilities.isNativePlatform) {
-          // For native platforms, we need to handle the session differently
-          // since we're using stored credentials
-          const credentials = await NativeBiometricService.getCredentials();
-          if (credentials.success && credentials.credentials) {
-            const { error } = await signIn(
-              credentials.credentials.username,
-              credentials.credentials.password
-            );
-            
-            if (error) {
-              toast({
-                variant: "destructive",
-                title: "Authentication Failed",
-                description: "Stored credentials are invalid. Please sign in with password.",
-              });
-              return { success: false, error: error.message };
-            }
-          }
-        } else {
-          // For web platforms, use the existing session token approach
-          const { error } = await signInWithBiometric(result.sessionToken!);
-          if (error) {
-            toast({
-              variant: "destructive",
-              title: "Authentication Failed",
-              description: error.message,
-            });
-            return { success: false, error: error.message };
-          }
-        }
-
-        toast({
-          title: "Authentication Successful",
-          description: "You have been authenticated using biometrics.",
-        });
-        return { success: true };
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Biometric Authentication Failed",
-          description: result.error || "Please try again or use password.",
-        });
-        return { success: false, error: result.error };
+      setState(prev => ({ ...prev, isLoading: false }));
+      
+      if (!result.success) {
+        setState(prev => ({ ...prev, error: result.error || 'Authentication failed' }));
+        return false;
       }
+      
+      return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
-      toast({
-        variant: "destructive",
-        title: "Authentication Error",
-        description: errorMessage,
-      });
-      return { success: false, error: errorMessage };
-    } finally {
-      setLoading(false);
+      console.error('Error authenticating with biometric:', error);
+      setState(prev => ({
+        ...prev,
+        error: 'Biometric authentication failed',
+        isLoading: false
+      }));
+      return false;
     }
   };
 
-  const setupBiometric = async (email: string, password: string, biometricType: 'fingerprint' | 'face') => {
-    setLoading(true);
+  const setupBiometric = async (userId: string, biometricType: 'fingerprint' | 'face'): Promise<boolean> => {
     try {
-      // First, authenticate with email/password to get user
-      const { error: signInError } = await signIn(email, password);
-      if (signInError) {
-        return { success: false, error: signInError.message };
-      }
-
-      // Get the current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        return { success: false, error: 'No authenticated user' };
-      }
-
-      // Setup biometric authentication
-      const result = await BiometricAuthService.setupBiometric(user.id, biometricType);
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
       
-      if (result.success) {
-        // For native platforms, store the credentials securely
-        if (capabilities.isNativePlatform) {
-          await NativeBiometricService.setCredentials(email, password);
-        }
-
-        await checkCapabilities(); // Refresh capabilities
-        
-        toast({
-          title: "Biometric Setup Complete",
-          description: `${biometricType === 'face' ? 'Face ID' : 'Fingerprint'} authentication is now enabled.`,
-        });
-        return { success: true };
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Biometric Setup Failed",
-          description: result.error || "Failed to setup biometric authentication.",
-        });
-        return { success: false, error: result.error };
+      const result = await BiometricAuthService.setupBiometric(userId, biometricType);
+      
+      setState(prev => ({ ...prev, isLoading: false }));
+      
+      if (!result.success) {
+        setState(prev => ({ ...prev, error: result.error || 'Setup failed' }));
+        return false;
       }
+      
+      // Refresh capabilities after successful setup
+      await checkBiometricCapabilities();
+      
+      return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Setup failed';
-      toast({
-        variant: "destructive",
-        title: "Setup Error",
-        description: errorMessage,
-      });
-      return { success: false, error: errorMessage };
-    } finally {
-      setLoading(false);
+      console.error('Error setting up biometric:', error);
+      setState(prev => ({
+        ...prev,
+        error: 'Biometric setup failed',
+        isLoading: false
+      }));
+      return false;
+    }
+  };
+
+  const disableBiometric = async (biometricType?: 'fingerprint' | 'face') => {
+    try {
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      
+      await BiometricAuthService.disableBiometricAuth(biometricType);
+      
+      // Refresh capabilities after disabling
+      await checkBiometricCapabilities();
+      
+      setState(prev => ({ ...prev, isLoading: false }));
+    } catch (error) {
+      console.error('Error disabling biometric:', error);
+      setState(prev => ({
+        ...prev,
+        error: 'Failed to disable biometric',
+        isLoading: false
+      }));
+    }
+  };
+
+  const refreshDeviceInfo = async () => {
+    try {
+      const deviceInfo = await Device.getInfo();
+      setState(prev => ({ ...prev, deviceInfo }));
+    } catch (error) {
+      console.error('Error refreshing device info:', error);
     }
   };
 
   return {
-    capabilities,
-    loading,
+    ...state,
+    checkBiometricCapabilities,
     authenticateWithBiometric,
     setupBiometric,
-    refreshCapabilities: checkCapabilities
+    disableBiometric,
+    refreshDeviceInfo
   };
-};
+}
