@@ -1,3 +1,4 @@
+
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
@@ -14,7 +15,23 @@ const config: CapacitorConfig = {
       backgroundColor: '#1a1a1a',
       showSpinner: false,
     },
+    NativeBiometric: {
+      biometricTitle: "VeriVault Authentication",
+      biometricSubTitle: "Use your biometric to authenticate",
+      biometricDescription: "Place your finger on the sensor or look at the camera",
+      fallbackTitle: "Use Password",
+      fallbackButtonTitle: "Cancel",
+    },
   },
+  android: {
+    buildOptions: {
+      keystorePath: undefined,
+      keystoreAlias: undefined,
+    }
+  },
+  ios: {
+    scheme: 'VeriVault'
+  }
 };
 
 export default config;

@@ -1,6 +1,9 @@
+
 import { enhancedBiometricService, EnhancedBiometricResult, BiometricSetupResult } from '@/services/biometricService';
+import { NativeBiometricService, NativeBiometricCapabilities } from '@/services/nativeBiometricService';
 import { supabase } from '@/integrations/supabase/client';
 import { Device } from '@capacitor/device';
+import { Capacitor } from '@capacitor/core';
 
 export interface BiometricCapabilities {
   isAvailable: boolean;
@@ -12,7 +15,19 @@ export interface BiometricCapabilities {
 export class BiometricAuthService {
   static async checkBiometricCapabilities(): Promise<BiometricCapabilities> {
     try {
-      // Check if we're running in a mobile environment
+      // Check if we're running on a native platform
+      if (Capacitor.isNativePlatform()) {
+        const nativeCapabilities = await NativeBiometricService.checkAvailability();
+        
+        return {
+          isAvailable: nativeCapabilities.isAvailable,
+          hasEnrolledBiometrics: nativeCapabilities.isAvailable,
+          biometryType: nativeCapabilities.biometryType || null,
+          errorMessage: nativeCapabilities.errorMessage
+        };
+      }
+
+      // Fallback to web implementation for non-native platforms
       const deviceInfo = await Device.getInfo();
       const isMobile = deviceInfo.platform === 'android' || deviceInfo.platform === 'ios';
       
@@ -61,18 +76,14 @@ export class BiometricAuthService {
       let biometryType = 'fingerprint'; // default
       
       if (deviceInfo.platform === 'ios') {
-        // iOS devices typically have Face ID or Touch ID
         biometryType = 'face'; // Modern iOS devices primarily use Face ID
       } else if (deviceInfo.platform === 'android') {
-        // Android devices typically use fingerprint
         biometryType = 'fingerprint';
       }
 
-      // For mobile, we'll assume biometric is available if the platform supports it
-      // The actual enrollment check will happen during authentication attempt
       return {
         isAvailable: true,
-        hasEnrolledBiometrics: true, // We'll validate this during actual auth
+        hasEnrolledBiometrics: true,
         biometryType
       };
     } catch (error) {
@@ -99,38 +110,32 @@ export class BiometricAuthService {
         };
       }
 
-      // First check if user has stored credentials
-      const credentials = await this.getStoredCredentials();
-      if (!credentials) {
-        return {
-          success: false,
-          error: 'No stored biometric credentials',
-          requiresFallback: true
-        };
-      }
-
-      // Check if we're on mobile
-      const deviceInfo = await Device.getInfo();
-      const isMobile = deviceInfo.platform === 'android' || deviceInfo.platform === 'ios';
-
-      if (isMobile) {
-        // For mobile, use simplified authentication flow
-        // In a real app, you would integrate with native biometric APIs
-        // For now, we'll simulate a successful authentication
-        console.log('Mobile biometric authentication simulated');
+      // Use native biometric service on mobile platforms
+      if (Capacitor.isNativePlatform()) {
+        console.log('Using native biometric authentication');
         
-        // Update last biometric login
-        await supabase
-          .from('profiles')
-          .update({ last_biometric_login: new Date().toISOString() })
-          .eq('id', user.id);
+        const credentialsResult = await NativeBiometricService.getCredentials();
+        
+        if (credentialsResult.success && credentialsResult.credentials) {
+          // Update last biometric login
+          await supabase
+            .from('profiles')
+            .update({ last_biometric_login: new Date().toISOString() })
+            .eq('id', user.id);
 
-        return {
-          success: true,
-          sessionToken: credentials.token
-        };
+          return {
+            success: true,
+            sessionToken: 'native-biometric-success'
+          };
+        } else {
+          return {
+            success: false,
+            error: credentialsResult.error || 'Native biometric authentication failed',
+            requiresFallback: true
+          };
+        }
       } else {
-        // For web, use the enhanced biometric service
+        // Fallback to enhanced biometric service for web
         const result = await enhancedBiometricService.authenticateWithBiometric(user.id);
         
         if (result.success) {
@@ -155,65 +160,87 @@ export class BiometricAuthService {
 
   static async authenticateWithEmail(email: string, biometricType: 'fingerprint' | 'face'): Promise<EnhancedBiometricResult> {
     try {
-      // Get user profile by email
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('id, biometric_token, device_id, biometric_failures, biometric_locked_until')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (error || !profile) {
-        return {
-          success: false,
-          error: 'User not found or biometric not set up',
-          requiresFallback: true
-        };
-      }
-
-      if (!profile.biometric_token) {
-        return {
-          success: false,
-          error: 'Biometric not set up for this user',
-          requiresFallback: true
-        };
-      }
-
-      // Check if account is temporarily locked
-      if (profile.biometric_locked_until && new Date(profile.biometric_locked_until) > new Date()) {
-        return { 
-          success: false, 
-          error: 'Biometric authentication temporarily locked', 
-          requiresFallback: true 
-        };
-      }
-
-      // Check if we're on mobile
-      const deviceInfo = await Device.getInfo();
-      const isMobile = deviceInfo.platform === 'android' || deviceInfo.platform === 'ios';
-
-      if (isMobile) {
-        // For mobile, use simplified authentication
-        console.log('Mobile biometric authentication for email:', email);
+      // Use native biometric service on mobile platforms
+      if (Capacitor.isNativePlatform()) {
+        console.log('Using native biometric authentication for email:', email);
         
-        // Reset failure count on success
-        await supabase
-          .from('profiles')
-          .update({
-            biometric_failures: 0,
-            biometric_locked_until: null,
-            last_biometric_login: new Date().toISOString()
-          })
-          .eq('id', profile.id);
-
-        // Create a proper session token
-        const sessionToken = this.generateSecureToken();
+        const credentialsResult = await NativeBiometricService.getCredentials();
         
-        return { 
-          success: true, 
-          sessionToken 
-        };
+        if (credentialsResult.success && credentialsResult.credentials) {
+          // Verify the stored email matches
+          if (credentialsResult.credentials.username === email) {
+            // Get user profile by email
+            const { data: profile, error } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', email)
+              .maybeSingle();
+
+            if (error || !profile) {
+              return {
+                success: false,
+                error: 'User not found',
+                requiresFallback: true
+              };
+            }
+
+            // Update last biometric login
+            await supabase
+              .from('profiles')
+              .update({ last_biometric_login: new Date().toISOString() })
+              .eq('id', profile.id);
+
+            return {
+              success: true,
+              sessionToken: 'native-biometric-success'
+            };
+          } else {
+            return {
+              success: false,
+              error: 'Stored credentials do not match this email',
+              requiresFallback: true
+            };
+          }
+        } else {
+          return {
+            success: false,
+            error: credentialsResult.error || 'Native biometric authentication failed',
+            requiresFallback: true
+          };
+        }
       } else {
-        // For web, use WebAuthn with timeout
+        // Fallback to enhanced biometric service for web
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('id, biometric_token, device_id, biometric_failures, biometric_locked_until')
+          .eq('email', email)
+          .maybeSingle();
+
+        if (error || !profile) {
+          return {
+            success: false,
+            error: 'User not found or biometric not set up',
+            requiresFallback: true
+          };
+        }
+
+        if (!profile.biometric_token) {
+          return {
+            success: false,
+            error: 'Biometric not set up for this user',
+            requiresFallback: true
+          };
+        }
+
+        // Check if account is temporarily locked
+        if (profile.biometric_locked_until && new Date(profile.biometric_locked_until) > new Date()) {
+          return { 
+            success: false, 
+            error: 'Biometric authentication temporarily locked', 
+            requiresFallback: true 
+          };
+        }
+
         const result = await enhancedBiometricService.authenticateWithBiometric(profile.id);
         
         if (result.success) {
@@ -249,14 +276,32 @@ export class BiometricAuthService {
 
   static async setupBiometric(userId: string, biometricType: 'fingerprint' | 'face'): Promise<BiometricSetupResult> {
     try {
-      const deviceInfo = await Device.getInfo();
-      const isMobile = deviceInfo.platform === 'android' || deviceInfo.platform === 'ios';
-
-      if (isMobile) {
-        // For mobile, use simplified setup
-        const result = await enhancedBiometricService.setupBiometric(userId, biometricType);
+      // Use native biometric service on mobile platforms
+      if (Capacitor.isNativePlatform()) {
+        console.log('Setting up native biometric authentication');
         
-        if (result.success) {
+        // Get user profile to get email
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', userId)
+          .single();
+
+        if (profileError || !profile) {
+          return {
+            success: false,
+            error: 'User profile not found'
+          };
+        }
+
+        // For native setup, we'll store the user's email as username
+        // In a real implementation, you might want to store an encrypted token instead
+        const setupResult = await NativeBiometricService.setCredentials(
+          profile.email,
+          'biometric-token-' + userId
+        );
+
+        if (setupResult.success) {
           // Update profile with biometric setup information
           const updates: any = {
             biometric_enabled: true,
@@ -274,11 +319,19 @@ export class BiometricAuthService {
             .from('profiles')
             .update(updates)
             .eq('id', userId);
+
+          return {
+            success: true,
+            biometricToken: 'native-biometric-setup'
+          };
+        } else {
+          return {
+            success: false,
+            error: setupResult.error
+          };
         }
-        
-        return result;
       } else {
-        // For web, use the original implementation
+        // Fallback to enhanced biometric service for web
         const result = await enhancedBiometricService.setupBiometric(userId, biometricType);
         
         if (result.success) {
@@ -323,6 +376,11 @@ export class BiometricAuthService {
       if (!user) {
         console.error('No authenticated user');
         return;
+      }
+
+      // Delete native credentials if on mobile
+      if (Capacitor.isNativePlatform()) {
+        await NativeBiometricService.deleteCredentials();
       }
 
       await enhancedBiometricService.disableBiometric(user.id, biometricType);
@@ -382,6 +440,18 @@ export class BiometricAuthService {
 
   static async getStoredCredentials(): Promise<{ userId: string; token: string } | null> {
     try {
+      // Check native credentials first on mobile
+      if (Capacitor.isNativePlatform()) {
+        const credentialsResult = await NativeBiometricService.getCredentials();
+        if (credentialsResult.success && credentialsResult.credentials) {
+          return {
+            userId: credentialsResult.credentials.username,
+            token: credentialsResult.credentials.password
+          };
+        }
+      }
+
+      // Fallback to Supabase credentials
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
