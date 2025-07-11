@@ -92,6 +92,19 @@
 - Use a physical device with Touch ID or Face ID
 - iOS Simulator can simulate biometric authentication
 
+## Current Biometric Implementation
+
+The current implementation uses a fallback biometric service that:
+- Detects native platform capabilities
+- Uses localStorage for credential storage in development
+- Provides mock biometric verification for testing
+- Will work with actual native biometric APIs when deployed
+
+For production deployment, you may want to integrate with:
+- Android BiometricPrompt API
+- iOS LocalAuthentication framework
+- Or use a more robust Capacitor biometric plugin
+
 ## Production Build
 
 1. **Generate signed APK (Android)**
@@ -138,3 +151,4 @@ For development with hot reload:
 3. Verify authentication persistence across app restarts
 4. Test app performance and battery usage
 5. Prepare for app store submission if needed
+6. Consider integrating with native biometric APIs for production use

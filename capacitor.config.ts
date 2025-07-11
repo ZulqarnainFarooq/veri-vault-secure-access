@@ -15,13 +15,6 @@ const config: CapacitorConfig = {
       backgroundColor: '#1a1a1a',
       showSpinner: false,
     },
-    NativeBiometric: {
-      biometricTitle: "VeriVault Authentication",
-      biometricSubTitle: "Use your biometric to authenticate",
-      biometricDescription: "Place your finger on the sensor or look at the camera",
-      fallbackTitle: "Use Password",
-      fallbackButtonTitle: "Cancel",
-    },
   },
   android: {
     buildOptions: {
