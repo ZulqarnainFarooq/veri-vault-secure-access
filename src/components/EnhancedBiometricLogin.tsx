@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Shield, Fingerprint, Eye, Mail, Lock, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Shield, Fingerprint, Eye, Mail, Lock, AlertCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { BiometricAuthService } from '@/lib/biometric-auth';
 import { AuthMethodService, AuthMethods } from '@/services/authMethodService';
@@ -34,17 +34,20 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
     setError('');
 
     try {
+      console.log('Submitting email:', email);
       const methods = await AuthMethodService.checkAuthMethodsForEmail(email);
+      console.log('Retrieved auth methods:', methods);
       
       if (!methods.hasPassword && !methods.hasBiometric) {
-        setError('No account found with this email address');
+        setError('No account found with this email address. Please check your email or sign up for a new account.');
         return;
       }
 
       setAuthMethods(methods);
       setCurrentStep('auth-method');
     } catch (error) {
-      setError('Failed to check authentication methods');
+      console.error('Email submit error:', error);
+      setError('Unable to verify email address. Please try again or contact support if the problem persists.');
     } finally {
       setLoading(false);
     }
@@ -56,13 +59,22 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
     setError('');
 
     try {
+      console.log('Attempting password login for:', email);
       const { error } = await signIn(email, password);
       
       if (error) {
-        setError(error.message);
+        console.error('Password login error:', error);
+        if (error.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please check your credentials and try again.');
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('Please confirm your email address before signing in. Check your inbox for a confirmation email.');
+        } else {
+          setError(error.message);
+        }
       }
     } catch (error) {
-      setError('An unexpected error occurred');
+      console.error('Unexpected password login error:', error);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -73,20 +85,27 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
     setError('');
 
     try {
-      const result = await BiometricAuthService.authenticate(biometricType);
+      console.log('Attempting biometric login:', biometricType, 'for email:', email);
+      const result = await BiometricAuthService.authenticateWithEmail(email, biometricType);
       
       if (result.success && result.sessionToken) {
         const { error } = await signInWithBiometric(result.sessionToken);
         
         if (error) {
-          setError(error.message);
+          console.error('Biometric session error:', error);
+          setError('Biometric authentication succeeded but login failed. Please try password login.');
         }
       } else {
-        setError(result.error || 'Biometric authentication failed');
+        console.error('Biometric authentication failed:', result.error);
+        if (result.requiresFallback) {
+          setError('Biometric authentication failed. Please use your password to sign in.');
+        } else {
+          setError(result.error || 'Biometric authentication failed');
+        }
       }
     } catch (error) {
       console.error('Biometric login error:', error);
-      setError('Biometric authentication failed');
+      setError('Biometric authentication failed. Please use your password to sign in.');
     } finally {
       setBiometricLoading(false);
     }
@@ -113,6 +132,7 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
             onChange={(e) => setEmail(e.target.value)}
             className="pl-10"
             required
+            disabled={loading}
           />
         </div>
       </div>
@@ -127,9 +147,16 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
       <Button
         type="submit"
         className="w-full bg-gradient-security hover:opacity-90"
-        disabled={loading}
+        disabled={loading || !email.trim()}
       >
-        {loading ? 'Checking...' : 'Continue'}
+        {loading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Checking...
+          </>
+        ) : (
+          'Continue'
+        )}
       </Button>
     </form>
   );
@@ -142,6 +169,7 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
         size="sm"
         onClick={handleBackToEmail}
         className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+        disabled={loading || biometricLoading}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to email
@@ -165,9 +193,13 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
                   variant="outline"
                   className="h-12 flex flex-col gap-1"
                   onClick={() => handleBiometricLogin('fingerprint')}
-                  disabled={biometricLoading}
+                  disabled={biometricLoading || loading}
                 >
-                  <Fingerprint className="h-5 w-5" />
+                  {biometricLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Fingerprint className="h-5 w-5" />
+                  )}
                   <span className="text-xs">Fingerprint</span>
                 </Button>
               )}
@@ -176,9 +208,13 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
                   variant="outline"
                   className="h-12 flex flex-col gap-1"
                   onClick={() => handleBiometricLogin('face')}
-                  disabled={biometricLoading}
+                  disabled={biometricLoading || loading}
                 >
-                  <Eye className="h-5 w-5" />
+                  {biometricLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
                   <span className="text-xs">Face ID</span>
                 </Button>
               )}
@@ -210,6 +246,7 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
               onChange={(e) => setPassword(e.target.value)}
               className="pl-10"
               required
+              disabled={loading || biometricLoading}
             />
           </div>
         </div>
@@ -224,9 +261,16 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
         <Button
           type="submit"
           className="w-full bg-gradient-security hover:opacity-90"
-          disabled={loading || biometricLoading}
+          disabled={loading || biometricLoading || !password.trim()}
         >
-          {loading ? 'Signing In...' : 'Sign In'}
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Signing In...
+            </>
+          ) : (
+            'Sign In'
+          )}
         </Button>
       </form>
     </div>
@@ -259,6 +303,7 @@ const EnhancedBiometricLogin: React.FC<EnhancedBiometricLoginProps> = ({ onSwitc
               <button
                 onClick={onSwitchToSignup}
                 className="text-primary hover:underline font-medium"
+                disabled={loading || biometricLoading}
               >
                 Sign up
               </button>

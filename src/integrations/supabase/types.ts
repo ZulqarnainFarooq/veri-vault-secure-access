@@ -157,7 +157,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      check_auth_methods_for_email: {
+        Args: { user_email: string }
+        Returns: {
+          user_id: string
+          has_password: boolean
+          has_biometric: boolean
+          biometric_types: string[]
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

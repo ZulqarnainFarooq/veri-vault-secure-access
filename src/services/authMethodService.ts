@@ -11,14 +11,28 @@ export interface AuthMethods {
 export class AuthMethodService {
   static async checkAuthMethodsForEmail(email: string): Promise<AuthMethods> {
     try {
-      // First check if user exists by attempting to get profile
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('id, biometric_enabled, fingerprint_enabled, face_id_enabled')
-        .eq('email', email)
-        .maybeSingle();
+      console.log('Checking auth methods for email:', email);
+      
+      // Use the new database function that bypasses RLS
+      const { data, error } = await supabase.rpc('check_auth_methods_for_email', {
+        user_email: email
+      });
 
-      if (error || !profile) {
+      console.log('Database function response:', { data, error });
+
+      if (error) {
+        console.error('Database function error:', error);
+        // Provide fallback - assume password login is available
+        return {
+          hasPassword: true,
+          hasBiometric: false,
+          biometricTypes: []
+        };
+      }
+
+      // If no data returned, user doesn't exist
+      if (!data || data.length === 0) {
+        console.log('No user found for email:', email);
         return {
           hasPassword: false,
           hasBiometric: false,
@@ -26,20 +40,20 @@ export class AuthMethodService {
         };
       }
 
-      const biometricTypes: string[] = [];
-      if (profile.fingerprint_enabled) biometricTypes.push('fingerprint');
-      if (profile.face_id_enabled) biometricTypes.push('face');
+      const userAuth = data[0];
+      console.log('User auth data:', userAuth);
 
       return {
-        hasPassword: true, // Assume password exists if profile exists
-        hasBiometric: profile.biometric_enabled && biometricTypes.length > 0,
-        biometricTypes,
-        userId: profile.id
+        hasPassword: userAuth.has_password,
+        hasBiometric: userAuth.has_biometric,
+        biometricTypes: userAuth.biometric_types || [],
+        userId: userAuth.user_id
       };
     } catch (error) {
       console.error('Error checking auth methods:', error);
+      // Provide fallback - assume password login is available
       return {
-        hasPassword: false,
+        hasPassword: true,
         hasBiometric: false,
         biometricTypes: []
       };
